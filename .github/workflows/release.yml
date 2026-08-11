@@ -31,15 +31,17 @@ jobs:
         shell: pwsh
         run: |
           choco install innosetup -y --no-progress
-          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
-          if (-not (Test-Path $iscc)) {
-            $iscc = "C:\Program Files\Inno Setup 6\ISCC.exe"
-          }
-          if (-not (Test-Path $iscc)) {
+          $candidates = @(
+            "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
+            "C:\Program Files\Inno Setup 6\ISCC.exe"
+          )
+          $iscc = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $iscc) {
             throw "ISCC.exe not found after choco install innosetup"
           }
-          echo "ISCC_PATH=$iscc" >> $env:GITHUB_ENV
-          & $iscc -?
+          Write-Host "ISCC_PATH=$iscc"
+          "ISCC_PATH=$iscc" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          if (-not (Test-Path $iscc)) { throw "ISCC path invalid: $iscc" }
 
       - name: Build Inno installer
         shell: pwsh
@@ -92,7 +94,6 @@ jobs:
       - name: Verify Linux artifact
         run: |
           set -euo pipefail
-          # Prefer arch-aware name; fall back to x64 token used on ubuntu-latest
           shopt -s nullglob
           files=(dist/AI-Image-Process-linux-*-portable.zip)
           if [[ ${#files[@]} -lt 1 ]]; then
@@ -101,9 +102,12 @@ jobs:
             exit 1
           fi
           ls -lh "${files[@]}"
-          # Normalize primary upload name for publish job
-          cp -f "${files[0]}" dist/AI-Image-Process-linux-x64-portable.zip
-          test -f dist/AI-Image-Process-linux-x64-portable.zip
+          # Normalize primary upload name when arch token already matches
+          target="dist/AI-Image-Process-linux-x64-portable.zip"
+          if [[ "${files[0]}" != "$target" ]]; then
+            cp -f "${files[0]}" "$target"
+          fi
+          test -f "$target"
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
@@ -137,11 +141,9 @@ jobs:
             exit 1
           fi
           ls -lh "${files[@]}"
-          # Keep arch-accurate primary name for publish
           primary="${files[0]}"
           echo "PRIMARY_MAC_ZIP=$(basename "$primary")" >> "$GITHUB_ENV"
-          cp -f "$primary" "dist/$(basename "$primary")"
-          # Also emit a stable path file list via artifact path glob
+          test -f "$primary"
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
@@ -183,7 +185,6 @@ jobs:
           test -f release-assets/AI-Image-Process-windows-x64-portable.zip
           test -f release-assets/AI-Image-Process-windows-x64-setup.exe
           test -f release-assets/AI-Image-Process-linux-x64-portable.zip
-          # macOS name includes runner arch
           shopt -s nullglob
           mac=(release-assets/AI-Image-Process-macos-*-portable.zip)
           test ${#mac[@]} -ge 1
