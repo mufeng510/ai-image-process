@@ -6,11 +6,13 @@ __pycache__/
 .venv/
 venv/
 dist/
-build/
+build/pyinstaller/
 *.egg-info/
 .omx/tmp/
 .omx/cache/
 .omx/logs/
+.omx/state/
+.omx/runtime/
 output/
 *.log
 .DS_Store

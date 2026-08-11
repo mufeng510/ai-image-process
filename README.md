@@ -52,3 +52,31 @@ QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q tests/gui
 ## 许可证
 
 MIT
+
+## 打包 / 发布
+
+详见 `build/README.md`。
+
+多平台官方 runner 自动打包（**全部 release-blocking**）：
+
+- Windows：便携 ZIP + Inno Setup 安装包
+- macOS / Linux：便携 ZIP（未签名）
+- 触发：推送 tag `v*` → `.github/workflows/release.yml` 构建并上传到 GitHub Release
+
+本地：
+
+```powershell
+# Windows portable
+./scripts/build_windows.ps1
+# Windows installer (needs Inno Setup)
+./scripts/build_windows_installer.ps1
+```
+
+```bash
+# Linux / macOS portable
+bash scripts/build_portable.sh
+```
+
+GitHub Actions：
+- `.github/workflows/ci.yml` — 测试
+- `.github/workflows/release.yml` — tag `v*` 在 windows/macOS/ubuntu 官方 runner 打包并发布 Release

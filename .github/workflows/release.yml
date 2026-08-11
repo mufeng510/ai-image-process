@@ -1,0 +1,198 @@
+name: Release
+
+on:
+  push:
+    tags: [ "v*" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  package-windows:
+    name: Windows portable + Inno setup (blocking)
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Build portable onedir + zip
+        shell: pwsh
+        run: ./scripts/build_windows.ps1
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            $iscc = "C:\Program Files\Inno Setup 6\ISCC.exe"
+          }
+          if (-not (Test-Path $iscc)) {
+            throw "ISCC.exe not found after choco install innosetup"
+          }
+          echo "ISCC_PATH=$iscc" >> $env:GITHUB_ENV
+          & $iscc -?
+
+      - name: Build Inno installer
+        shell: pwsh
+        env:
+          ISCC_PATH: ${{ env.ISCC_PATH }}
+        run: ./scripts/build_windows_installer.ps1
+
+      - name: Verify Windows artifacts
+        shell: pwsh
+        run: |
+          $required = @(
+            "dist\AI-Image-Process-windows-x64-portable.zip",
+            "dist\AI-Image-Process-windows-x64-setup.exe"
+          )
+          foreach ($p in $required) {
+            if (-not (Test-Path $p)) { throw "missing required artifact: $p" }
+            Write-Host "ok $p ($((Get-Item $p).Length) bytes)"
+          }
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-windows-x64
+          path: |
+            dist/AI-Image-Process-windows-x64-portable.zip
+            dist/AI-Image-Process-windows-x64-setup.exe
+          if-no-files-found: error
+
+  package-linux:
+    name: Linux portable (blocking)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: System libs for Qt / packaging
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            libgl1 libglib2.0-0 libxkbcommon0 libdbus-1-3 \
+            libfontconfig1 libx11-6 libxcb1 libxext6 zip
+
+      - name: Build portable + archive
+        run: bash scripts/build_portable.sh
+
+      - name: Verify Linux artifact
+        run: |
+          set -euo pipefail
+          # Prefer arch-aware name; fall back to x64 token used on ubuntu-latest
+          shopt -s nullglob
+          files=(dist/AI-Image-Process-linux-*-portable.zip)
+          if [[ ${#files[@]} -lt 1 ]]; then
+            echo "missing linux portable zip under dist/" >&2
+            ls -la dist || true
+            exit 1
+          fi
+          ls -lh "${files[@]}"
+          # Normalize primary upload name for publish job
+          cp -f "${files[0]}" dist/AI-Image-Process-linux-x64-portable.zip
+          test -f dist/AI-Image-Process-linux-x64-portable.zip
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-linux-x64
+          path: dist/AI-Image-Process-linux-x64-portable.zip
+          if-no-files-found: error
+
+  package-macos:
+    name: macOS portable (blocking)
+    runs-on: macos-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Build portable + archive
+        run: bash scripts/build_portable.sh
+
+      - name: Verify macOS artifact
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(dist/AI-Image-Process-macos-*-portable.zip)
+          if [[ ${#files[@]} -lt 1 ]]; then
+            echo "missing macOS portable zip under dist/" >&2
+            ls -la dist || true
+            exit 1
+          fi
+          ls -lh "${files[@]}"
+          # Keep arch-accurate primary name for publish
+          primary="${files[0]}"
+          echo "PRIMARY_MAC_ZIP=$(basename "$primary")" >> "$GITHUB_ENV"
+          cp -f "$primary" "dist/$(basename "$primary")"
+          # Also emit a stable path file list via artifact path glob
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-macos
+          path: dist/AI-Image-Process-macos-*-portable.zip
+          if-no-files-found: error
+
+  publish-release:
+    name: Publish GitHub Release (tags only)
+    needs: [package-windows, package-linux, package-macos]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-windows-x64
+          path: release-assets
+
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-linux-x64
+          path: release-assets
+
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-macos
+          path: release-assets
+
+      - name: List release assets
+        run: |
+          set -euo pipefail
+          ls -lah release-assets
+          test -f release-assets/AI-Image-Process-windows-x64-portable.zip
+          test -f release-assets/AI-Image-Process-windows-x64-setup.exe
+          test -f release-assets/AI-Image-Process-linux-x64-portable.zip
+          # macOS name includes runner arch
+          shopt -s nullglob
+          mac=(release-assets/AI-Image-Process-macos-*-portable.zip)
+          test ${#mac[@]} -ge 1
+
+      - name: Upload assets to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/*
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
