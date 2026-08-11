@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ai-image-process"
+version = "0.1.0"
+description = "Cross-platform AI image process desktop client"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "沐风" }]
+dependencies = [
+  "Pillow>=10.0.0",
+]
+
+[project.optional-dependencies]
+gui = ["PySide6-Essentials>=6.6.0"]
+dev = ["pytest>=8.0.0"]
+provenance = ["remove-ai-watermarks>=0.26.0"]
+
+[project.scripts]
+ai-image-process = "app.main_cli:main"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

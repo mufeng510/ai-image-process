@@ -1,0 +1,5 @@
+Pillow>=10.0.0
+PySide6-Essentials>=6.6.0
+pytest>=8.0.0
+# Optional provenance cleanup (metadata mode):
+# remove-ai-watermarks>=0.26.0
