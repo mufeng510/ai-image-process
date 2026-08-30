@@ -7,6 +7,7 @@ from pathlib import Path
 from app.config.schema import AppConfig
 from app.core.models import StepResult
 from app.core.steps.base import Step, StepContext
+from app.platform import CREATE_NO_WINDOW
 
 
 class ProvenanceCleanupStep(Step):
@@ -75,7 +76,13 @@ def _try_remove_ai_watermarks(src: Path, dest: Path, mode: str = "metadata") -> 
         single = isolated_in / src.name
         shutil.copy2(src, single)
         cmd = [sys.executable, "-m", "remove_ai_watermarks", "batch", str(isolated_in), "-o", str(isolated_out), "--mode", mode]
-        proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=False,
+            creationflags=CREATE_NO_WINDOW,
+        )
         if proc.returncode != 0:
             raise RuntimeError(proc.stderr or proc.stdout or "remove-ai-watermarks failed")
         outputs = list(isolated_out.glob("*"))

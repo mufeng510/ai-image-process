@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 from app.config.paths import exiftool_candidates
+from app.platform import CREATE_NO_WINDOW
 
 
 class ExifToolRunner:
@@ -36,7 +37,13 @@ class ExifToolRunner:
         if not self.available():
             raise FileNotFoundError("ExifTool binary not found in app resources")
         cmd = [str(self.binary), *args]
-        proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=False,
+            creationflags=CREATE_NO_WINDOW,
+        )
         if proc.returncode != 0:
             raise RuntimeError(proc.stderr or proc.stdout or "exiftool failed")
         return proc

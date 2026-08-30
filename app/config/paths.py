@@ -91,7 +91,6 @@ def exiftool_candidates() -> list[Path]:
     ]
     windows = [
         root / "Tools" / "exiftool" / "exiftool.exe",
-        root / "DoubaoProcessor" / "Tools" / "exiftool-13.59_64" / "exiftool.exe",
         resource_path("Tools", "exiftool", "exiftool.exe"),
     ]
     if sys.platform.startswith("win"):

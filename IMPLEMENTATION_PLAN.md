@@ -56,7 +56,7 @@ app/core/{models,pipeline,steps/*,naming,conflicts,temp_manager,device_library,e
 app/config/{schema,manager,paths,migrate}
 app/gui/...
 app/platform/{windows,macos,linux,runtime_paths}
-tests, build, scripts, assets, DoubaoProcessor legacy
+tests, build, scripts, assets, Tools/exiftool (bundled; legacy DoubaoProcessor removed)
 .github/workflows ci.yml release.yml
 
 ## 5. Core API contracts
@@ -112,7 +112,7 @@ For ExifTool, ICC, phones.json:
 1. explicit config override if set
 2. portable/app Tools or assets next to executable
 3. frozen bundle resources
-4. dev repo assets / DoubaoProcessor Tools
+4. dev repo Tools/exiftool / assets
 Never require user PATH in release builds. No PATH Magick fallback for end users.
 
 ## 8. GUI

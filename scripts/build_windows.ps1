@@ -10,17 +10,10 @@ if (Test-Path ".venv\Scripts\python.exe") { $py = ".venv\Scripts\python.exe" }
 & $py -m pip install -U pip wheel
 & $py -m pip install -r requirements.txt pyinstaller "PySide6-Essentials>=6.6.0"
 
-# Bundle ExifTool into Tools/exiftool if not present (Windows best-effort; non-blocking if missing)
-$dest = Join-Path $Root "Tools\exiftool"
+# ExifTool lives in-repo at Tools/exiftool and is bundled by the PyInstaller spec.
+$dest = Join-Path $Root "Tools\exiftool\exiftool.exe"
 if (-not (Test-Path $dest)) {
-  $src = Join-Path $Root "DoubaoProcessor\Tools\exiftool-13.59_64"
-  if (Test-Path $src) {
-    New-Item -ItemType Directory -Force -Path $dest | Out-Null
-    Copy-Item -Recurse -Force (Join-Path $src "*") $dest
-    Write-Host "[build] copied ExifTool from DoubaoProcessor reference tree"
-  } else {
-    Write-Host "[build] WARNING: no ExifTool tree found; device metadata step will be limited"
-  }
+  Write-Host "[build] WARNING: Tools\exiftool\exiftool.exe missing; device metadata step will be limited"
 }
 
 if (Test-Path "dist\AI-Image-Process") { Remove-Item -Recurse -Force "dist\AI-Image-Process" }

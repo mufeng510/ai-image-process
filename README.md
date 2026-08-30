@@ -6,7 +6,7 @@
 
 - **Phase 2**：Python 核心处理层 + CLI 已落地
 - **Phase 4**：PySide6 GUI 主界面 / 设置 / 后台线程已落地
-- 遗留 Windows 脚本仍保留在 `DoubaoProcessor/` 作为参考
+- 旧的 `DoubaoProcessor/` Windows 脚本已移除；ExifTool 随仓库置于 `Tools/exiftool/`
 - 安装包与多平台发布仍在后续阶段
 
 ## 启动 GUI
