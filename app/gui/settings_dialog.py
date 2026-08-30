@@ -4,7 +4,7 @@ from __future__ import annotations
 from copy import deepcopy
 from pathlib import Path
 
-from PySide6.QtCore import QUrl
+from PySide6.QtCore import QObject, QThread, QUrl, Signal, Slot
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -29,11 +29,31 @@ from PySide6.QtWidgets import (
 from app.config.manager import ConfigManager
 from app.config.paths import phones_json_path, user_config_dir
 from app.config.schema import AppConfig, default_config
+from app.core import visible_models
 from app.core.device_library import DeviceLibrary
 from app.gui.naming_presets import NAMING_PRESETS, template_for_preset
 from app.version import __version__
 
 GITHUB_URL = "https://github.com/mufeng510/ai-image-process"
+
+
+class ModelDownloadWorker(QObject):
+    """Runs a user-initiated model download off the UI thread."""
+
+    ok = Signal(str, str)  # backend, message
+    failed = Signal(str, str)  # backend, error
+
+    def __init__(self, backend: str, parent: QObject | None = None) -> None:
+        super().__init__(parent)
+        self._backend = backend
+
+    @Slot()
+    def run(self) -> None:
+        try:
+            visible_models.download_model(self._backend)
+            self.ok.emit(self._backend, f"{self._backend} 模型下载完成")
+        except Exception as exc:  # noqa: BLE001
+            self.failed.emit(self._backend, str(exc))
 
 
 class SettingsDialog(QDialog):
@@ -45,6 +65,8 @@ class SettingsDialog(QDialog):
         self.resize(620, 560)
         self._config = deepcopy(config)
         self._devices: list[tuple[str, str]] = []  # (id, label)
+        self._dl_thread: QThread | None = None
+        self._dl_worker: ModelDownloadWorker | None = None
         self._load_devices()
 
         root = QVBoxLayout(self)
@@ -165,6 +187,40 @@ class SettingsDialog(QDialog):
         note.setStyleSheet("color:#666;font-size:11px;")
         pf.addRow(note)
         layout.addWidget(prov)
+
+        # Visible watermark removal
+        vis = QGroupBox("去除可见水印（AI 标记，如 Gemini/豆包/即梦角标）")
+        vf = QFormLayout(vis)
+        self.chk_visible = QCheckBox("启用此步骤")
+        vf.addRow(self.chk_visible)
+        self.visible_backend = QComboBox()
+        self.visible_backend.addItem("auto（自动选择最佳可用后端）", "auto")
+        self.visible_backend.addItem("cv2（OpenCV 修复，无需模型）", "cv2")
+        self.visible_backend.addItem("migan（MI-GAN，约 28 MB 模型）", "migan")
+        self.visible_backend.addItem("lama（big-LaMa，质量优先，体积较大）", "lama")
+        vf.addRow("填充后端", self.visible_backend)
+        self.visible_status = QLabel()
+        self.visible_status.setWordWrap(True)
+        self.visible_status.setStyleSheet("color:#666;font-size:11px;")
+        vf.addRow("状态", self.visible_status)
+        dl_row = QHBoxLayout()
+        self.btn_dl_migan = QPushButton("下载 migan 模型")
+        self.btn_dl_lama = QPushButton("下载 lama 模型")
+        self.btn_dl_migan.clicked.connect(lambda: self._download_visible_model("migan"))
+        self.btn_dl_lama.clicked.connect(lambda: self._download_visible_model("lama"))
+        dl_row.addWidget(self.btn_dl_migan)
+        dl_row.addWidget(self.btn_dl_lama)
+        dl_row.addStretch(1)
+        vf.addRow("模型下载", dl_row)
+        vis_note = QLabel(
+            "软件不预置任何模型；默认 cv2 后端无需模型即可工作。"
+            "migan/lama 为可选的神经网络修复后端，模型由用户在此页面手动下载，"
+            "下载后缓存于本机（Hugging Face 缓存目录），首次使用也会自动下载。"
+        )
+        vis_note.setWordWrap(True)
+        vis_note.setStyleSheet("color:#666;font-size:11px;")
+        vf.addRow(vis_note)
+        layout.addWidget(vis)
 
         # Reencode
         reenc = QGroupBox("图片重编码")
@@ -333,6 +389,77 @@ class SettingsDialog(QDialog):
         fixed = str(self.device_selection.currentData()) == "fixed"
         self.device_fixed.setEnabled(fixed)
 
+    # ----- visible watermark model management -----
+    _MODEL_STATUS_TEXT = {
+        "downloaded": "模型已下载",
+        "not_downloaded": "模型未下载",
+        "not_installed": "依赖未安装",
+        "unknown": "状态未知",
+    }
+
+    def _refresh_visible_status(self) -> None:
+        st = visible_models.package_status()
+        if not st.importable:
+            self.visible_status.setText(
+                'remove-ai-watermarks 未安装，启用后该步骤会失败。安装：pip install "remove-ai-watermarks[visible]"'
+            )
+        elif not st.visible_ready:
+            ver = st.version or "?"
+            self.visible_status.setText(
+                f"已安装 v{ver}，但缺少像素运行时。安装：pip install \"remove-ai-watermarks[visible]\""
+            )
+        else:
+            ver = st.version or "?"
+            parts = [f"remove-ai-watermarks v{ver} 可用"]
+            for backend in visible_models.LEARNED_BACKENDS:
+                ms = visible_models.model_status(backend)
+                parts.append(f"{backend}: {self._MODEL_STATUS_TEXT.get(ms, ms)}")
+            if not st.onnx_ready:
+                parts.append('（migan/lama 需 onnxruntime：pip install "remove-ai-watermarks[migan]"）')
+            self.visible_status.setText("；".join(parts))
+        ready = st.visible_ready and st.onnx_ready
+        self.btn_dl_migan.setEnabled(ready)
+        self.btn_dl_lama.setEnabled(ready)
+
+    def _download_visible_model(self, backend: str) -> None:
+        if getattr(self, "_dl_thread", None) is not None and self._dl_thread.isRunning():
+            QMessageBox.information(self, "下载中", "已有模型下载任务正在进行，请稍候。")
+            return
+        self._set_download_busy(backend, True)
+        self.visible_status.setText(f"正在下载 {backend} 模型…（完成后可关闭本窗口）")
+        self._dl_thread = QThread(self)
+        self._dl_worker = ModelDownloadWorker(backend)
+        self._dl_worker.moveToThread(self._dl_thread)
+        self._dl_thread.started.connect(self._dl_worker.run)
+        self._dl_worker.ok.connect(self._on_model_download_ok)
+        self._dl_worker.failed.connect(self._on_model_download_failed)
+        self._dl_worker.ok.connect(self._dl_thread.quit)
+        self._dl_worker.failed.connect(self._dl_thread.quit)
+        self._dl_thread.finished.connect(self._dl_worker.deleteLater)
+        self._dl_thread.finished.connect(self._on_dl_thread_finished)
+        self._dl_thread.start()
+
+    def _set_download_busy(self, backend: str, busy: bool) -> None:
+        self.btn_dl_migan.setEnabled(not busy)
+        self.btn_dl_lama.setEnabled(not busy)
+
+    @Slot(str, str)
+    def _on_model_download_ok(self, backend: str, message: str) -> None:
+        self.visible_status.setText(message)
+        self._refresh_visible_status()
+
+    @Slot(str, str)
+    def _on_model_download_failed(self, backend: str, error: str) -> None:
+        hint = visible_models.install_hint(backend)
+        self.visible_status.setText(f"{backend} 模型下载失败：{error}\n提示：{hint}")
+        self._refresh_visible_status()
+
+    @Slot()
+    def _on_dl_thread_finished(self) -> None:
+        self._dl_thread = None
+        self._dl_worker = None
+        self._refresh_visible_status()
+
     def _export_config(self) -> None:
         path, _ = QFileDialog.getSaveFileName(
             self, "导出配置", str(Path.home() / "ai-image-process-config.json"), "JSON (*.json)"
@@ -417,6 +544,11 @@ class SettingsDialog(QDialog):
         midx = self.prov_mode.findData(cfg.steps.provenance_cleanup.mode)
         self.prov_mode.setCurrentIndex(max(0, midx))
 
+        self.chk_visible.setChecked(cfg.steps.visible_watermark.enabled)
+        vbidx = self.visible_backend.findData(cfg.steps.visible_watermark.backend)
+        self.visible_backend.setCurrentIndex(max(0, vbidx))
+        self._refresh_visible_status()
+
         self.chk_reenc.setChecked(cfg.steps.reencode.enabled)
         self.qmin.setValue(cfg.steps.reencode.quality_min)
         self.qmax.setValue(cfg.steps.reencode.quality_max)
@@ -478,6 +610,9 @@ class SettingsDialog(QDialog):
 
         cfg.steps.provenance_cleanup.enabled = self.chk_prov.isChecked()
         cfg.steps.provenance_cleanup.mode = str(self.prov_mode.currentData() or "metadata")
+
+        cfg.steps.visible_watermark.enabled = self.chk_visible.isChecked()
+        cfg.steps.visible_watermark.backend = str(self.visible_backend.currentData() or "auto")
 
         qmin = int(self.qmin.value())
         qmax = int(self.qmax.value())

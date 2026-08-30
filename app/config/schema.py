@@ -34,6 +34,12 @@ class ProvenanceStepConfig:
 
 
 @dataclass
+class VisibleWatermarkStepConfig:
+    enabled: bool = False  # opt-in: needs the optional remove-ai-watermarks[visible] extra
+    backend: str = "auto"  # auto|cv2|migan|lama (migan/lama need a model download)
+
+
+@dataclass
 class ReencodeStepConfig:
     enabled: bool = True
     format: str = "jpeg"
@@ -61,6 +67,7 @@ class SimpleStepConfig:
 @dataclass
 class StepsConfig:
     provenance_cleanup: ProvenanceStepConfig = field(default_factory=ProvenanceStepConfig)
+    visible_watermark: VisibleWatermarkStepConfig = field(default_factory=VisibleWatermarkStepConfig)
     reencode: ReencodeStepConfig = field(default_factory=ReencodeStepConfig)
     device_metadata: DeviceMetadataStepConfig = field(default_factory=DeviceMetadataStepConfig)
     rename: SimpleStepConfig = field(default_factory=SimpleStepConfig)
@@ -110,6 +117,7 @@ class AppConfig:
         steps_raw = data.get("steps", {})
         steps = StepsConfig(
             provenance_cleanup=ProvenanceStepConfig(**_filter(steps_raw.get("provenance_cleanup", {}), ProvenanceStepConfig)),
+            visible_watermark=VisibleWatermarkStepConfig(**_filter(steps_raw.get("visible_watermark", {}), VisibleWatermarkStepConfig)),
             reencode=ReencodeStepConfig(**_filter(steps_raw.get("reencode", {}), ReencodeStepConfig)),
             device_metadata=DeviceMetadataStepConfig(**_filter(steps_raw.get("device_metadata", {}), DeviceMetadataStepConfig)),
             rename=SimpleStepConfig(**_filter(steps_raw.get("rename", {}), SimpleStepConfig)),

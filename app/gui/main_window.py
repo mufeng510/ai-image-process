@@ -98,12 +98,14 @@ class MainWindow(QMainWindow):
         steps_box = QGroupBox("处理步骤")
         steps_layout = QVBoxLayout(steps_box)
         self.chk_provenance = QCheckBox("清理 AI Metadata / 溯源信息")
+        self.chk_visible = QCheckBox("去除可见水印（AI 标记）")
         self.chk_reencode = QCheckBox("图片重编码（JPEG + sRGB）")
         self.chk_device = QCheckBox("写入设备 Metadata")
         self.chk_rename = QCheckBox("文件命名")
         self.chk_output = QCheckBox("输出处理后的图片")
         for w in (
             self.chk_provenance,
+            self.chk_visible,
             self.chk_reencode,
             self.chk_device,
             self.chk_rename,
@@ -111,6 +113,8 @@ class MainWindow(QMainWindow):
         ):
             w.setChecked(True)
             steps_layout.addWidget(w)
+        # 可见水印去除需可选依赖，默认关闭
+        self.chk_visible.setChecked(False)
         root.addWidget(steps_box)
 
         action = QHBoxLayout()
@@ -161,6 +165,7 @@ class MainWindow(QMainWindow):
         self.chk_auto_create.setChecked(self._config.output.auto_create_directory)
         self.chk_preserve.setChecked(self._config.output.preserve_originals)
         self.chk_provenance.setChecked(self._config.steps.provenance_cleanup.enabled)
+        self.chk_visible.setChecked(self._config.steps.visible_watermark.enabled)
         self.chk_reencode.setChecked(self._config.steps.reencode.enabled)
         self.chk_device.setChecked(self._config.steps.device_metadata.enabled)
         self.chk_rename.setChecked(self._config.steps.rename.enabled)
@@ -172,6 +177,7 @@ class MainWindow(QMainWindow):
         cfg.output.auto_create_directory = self.chk_auto_create.isChecked()
         cfg.output.preserve_originals = self.chk_preserve.isChecked()
         cfg.steps.provenance_cleanup.enabled = self.chk_provenance.isChecked()
+        cfg.steps.visible_watermark.enabled = self.chk_visible.isChecked()
         cfg.steps.reencode.enabled = self.chk_reencode.isChecked()
         cfg.steps.device_metadata.enabled = self.chk_device.isChecked()
         cfg.steps.rename.enabled = self.chk_rename.isChecked()

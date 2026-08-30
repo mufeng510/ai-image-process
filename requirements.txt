@@ -3,3 +3,9 @@ PySide6-Essentials>=6.6.0
 pytest>=8.0.0
 # Optional provenance cleanup (metadata mode):
 # remove-ai-watermarks>=0.26.0
+# Optional visible watermark removal (model weights are NOT bundled;
+# download them from the app settings page or let first use fetch them):
+# remove-ai-watermarks[visible]>=0.34.0
+# Optional learned inpaint backends (onnxruntime + huggingface-hub):
+# remove-ai-watermarks[migan]>=0.34.0
+# remove-ai-watermarks[lama]>=0.34.0

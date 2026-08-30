@@ -27,11 +27,13 @@ from app.core.steps.output_write import OutputWriteStep
 from app.core.steps.provenance_cleanup import ProvenanceCleanupStep
 from app.core.steps.reencode import ReencodeStep
 from app.core.steps.rename import RenameStep
+from app.core.steps.visible_watermark import VisibleWatermarkStep
 from app.core.temp_manager import TempManager
 
 
 DEFAULT_STEP_ORDER = [
     "provenance_cleanup",
+    "visible_watermark",
     "reencode",
     "device_metadata",
     "rename",
@@ -43,6 +45,7 @@ def build_default_registry() -> StepRegistry:
     reg = StepRegistry()
     for step in (
         ProvenanceCleanupStep(),
+        VisibleWatermarkStep(),
         ReencodeStep(),
         DeviceMetadataStep(),
         RenameStep(),
