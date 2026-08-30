@@ -14,7 +14,7 @@ dist/AI-Image-Process/
   BUILD_INFO.txt
 ```
 
-Release artifacts (on tag `v*`):
+Release artifacts (on tag `v*` or each `main` push):
 
 - `AI-Image-Process-windows-x64-portable.zip`
 - `AI-Image-Process-windows-x64-setup.exe` (Inno Setup)
@@ -54,9 +54,10 @@ bash scripts/build_portable.sh
 
 Workflow: `.github/workflows/release.yml`
 
-- Triggers: push tag `v*`, or `workflow_dispatch` (build artifacts only; Release publish is tag-only)
+- Triggers: push to `main` (auto prerelease `v<version>-build.<run_number>`), push tag `v*` (stable release), or `workflow_dispatch`
 - Runners: `windows-latest`, `macos-latest`, `ubuntu-latest` (official hosted only)
-- Jobs: `package-windows`, `package-linux`, `package-macos` (all blocking) → `publish-release` (tags only)
+- Jobs: `package-windows`, `package-linux`, `package-macos` (all blocking) → `publish-release`
+- Branch-push builds publish as **prerelease** and never take over the "Latest" stable release; tag builds publish as full releases
 
 Create a release:
 

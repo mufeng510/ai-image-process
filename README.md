@@ -61,7 +61,10 @@ MIT
 
 - Windows：便携 ZIP + Inno Setup 安装包
 - macOS / Linux：便携 ZIP（未签名）
-- 触发：推送 tag `v*` → `.github/workflows/release.yml` 构建并上传到 GitHub Release
+- 触发：
+  - 推送到 `main` → 自动构建并发布 **prerelease**（tag 形如 `v0.1.0-build.<运行号>`）
+  - 推送 tag `v*` → 构建并发布正式 Release
+- 工作流：`.github/workflows/release.yml`
 
 本地：
 
