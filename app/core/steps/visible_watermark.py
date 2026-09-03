@@ -66,6 +66,15 @@ def _remove_visible(src: Path, dest: Path, *, backend: str) -> list[str]:
         _, removed = raiw.remove_visible(str(src), str(dest), backend=backend)
         return list(removed or [])
 
+    from app.config.paths import is_frozen
+
+    if is_frozen():
+        raise RuntimeError(
+            "remove-ai-watermarks CLI 子进程在打包模式下不可用；"
+            "请通过库 API 安装并确保其可正常工作，"
+            '或在非打包环境运行: pip install "remove-ai-watermarks[visible]"'
+        )
+
     cmd = [
         sys.executable,
         "-m",

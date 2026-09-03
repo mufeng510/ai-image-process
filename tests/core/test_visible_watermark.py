@@ -141,3 +141,21 @@ def test_run_no_mark_copies_through(tmp_path: Path):
     assert "未检测到" in result.message
     assert ctx.record.current_path == dest
     assert dest.exists()
+
+
+def test_subprocess_fallback_blocked_when_frozen(tmp_path: Path):
+    """When app is frozen (PyInstaller), sys.executable is the app .exe.
+    Running it would pop a new GUI window instead of invoking the CLI."""
+    cfg = default_config()
+    cfg.steps.visible_watermark.enabled = True
+    step = VisibleWatermarkStep()
+    ctx = _ctx(tmp_path, cfg)
+
+    import_patch, _ = _package_missing()
+    with import_patch:
+        with patch("app.config.paths.is_frozen", return_value=True):
+            result = step.run(ctx)
+
+    assert isinstance(result, StepResult)
+    assert not result.ok
+    assert "打包模式" in (result.error or "")

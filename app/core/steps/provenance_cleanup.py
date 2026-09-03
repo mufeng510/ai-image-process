@@ -65,6 +65,18 @@ def _try_remove_ai_watermarks(src: Path, dest: Path, mode: str = "metadata") -> 
         import subprocess
         import sys
 
+        from app.config.paths import is_frozen
+
+        # In a frozen (PyInstaller) app sys.executable is the app's own .exe;
+        # re-launching it would pop a new GUI window instead of running the
+        # CLI, so we must never use the subprocess fallback in that case.
+        if is_frozen():
+            raise RuntimeError(
+                "remove-ai-watermarks CLI 子进程在打包模式下不可用；"
+                "请通过库 API 安装并确保其可正常工作，"
+                '或在非打包环境运行: pip install "remove-ai-watermarks[visible]"'
+            )
+
         dest.parent.mkdir(parents=True, exist_ok=True)
         # batch-like single file via CLI if present on module
         cmd = [sys.executable, "-m", "remove_ai_watermarks", "batch", str(src.parent), "-o", str(dest.parent), "--mode", mode]

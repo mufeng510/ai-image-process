@@ -13,6 +13,7 @@ build/pyinstaller/
 .omx/logs/
 .omx/state/
 .omx/runtime/
+.omo/
 output/
 *.log
 .DS_Store
