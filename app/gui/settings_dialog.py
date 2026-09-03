@@ -9,6 +9,7 @@ from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QDesktopWidget,
     QDialog,
     QDialogButtonBox,
     QFileDialog,
@@ -19,6 +20,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMessageBox,
     QPushButton,
+    QScrollArea,
     QSpinBox,
     QTabWidget,
     QTextBrowser,
@@ -62,7 +64,6 @@ class SettingsDialog(QDialog):
     def __init__(self, config: AppConfig, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("设置")
-        self.resize(620, 560)
         self._config = deepcopy(config)
         self._devices: list[tuple[str, str]] = []  # (id, label)
         self._dl_thread: QThread | None = None
@@ -70,6 +71,7 @@ class SettingsDialog(QDialog):
         self._load_devices()
 
         root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
         self.tabs = QTabWidget()
         root.addWidget(self.tabs)
 
@@ -87,6 +89,8 @@ class SettingsDialog(QDialog):
         buttons.rejected.connect(self.reject)
         root.addWidget(buttons)
 
+        self._fit_to_screen()
+
     # ----- data helpers -----
     def _load_devices(self) -> None:
         self._devices = []
@@ -102,6 +106,20 @@ class SettingsDialog(QDialog):
 
     def config(self) -> AppConfig:
         return self._config
+
+    def _fit_to_screen(self) -> None:
+        screen = QDesktopWidget().screenGeometry()
+        max_w = int(screen.width() * 0.85)
+        max_h = int(screen.height() * 0.85)
+        self.resize(min(620, max_w), min(560, max_h))
+        self.setMaximumSize(max_w, max_h)
+
+    def _make_scrollable(self, widget: QWidget) -> QScrollArea:
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(widget)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        return scroll
 
     # ----- tabs -----
     def _build_general_tab(self) -> QWidget:
@@ -168,7 +186,7 @@ class SettingsDialog(QDialog):
         layout.addWidget(clean_box)
 
         layout.addStretch(1)
-        return page
+        return self._make_scrollable(page)
 
     def _build_processing_tab(self) -> QWidget:
         page = QWidget()
@@ -284,7 +302,7 @@ class SettingsDialog(QDialog):
         layout.addWidget(inp)
 
         layout.addStretch(1)
-        return page
+        return self._make_scrollable(page)
 
     def _build_advanced_tab(self) -> QWidget:
         page = QWidget()
@@ -341,7 +359,7 @@ class SettingsDialog(QDialog):
         tip.setStyleSheet("color:#666;font-size:11px;")
         layout.addWidget(tip)
         layout.addStretch(1)
-        return page
+        return self._make_scrollable(page)
 
     def _build_about_tab(self) -> QWidget:
         page = QWidget()
@@ -363,7 +381,7 @@ class SettingsDialog(QDialog):
         btn = QPushButton("打开 GitHub 页面")
         btn.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(GITHUB_URL)))
         layout.addWidget(btn)
-        return page
+        return self._make_scrollable(page)
 
     # ----- UI events -----
     def _browse_output(self) -> None:
