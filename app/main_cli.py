@@ -8,6 +8,7 @@ from pathlib import Path
 
 from app.config.manager import ConfigManager
 from app.config.schema import default_config
+from app.core.dependency_installer import ensure_runtime_site
 from app.core.models import CancelToken, ProgressEvent
 from app.core.pipeline import run_job
 from app.version import __version__
@@ -31,6 +32,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    # Pick up in-app installed packages before any lazy import of the
+    # optional remove_ai_watermarks dependency.
+    ensure_runtime_site()
     if args.config:
         cfg = ConfigManager(Path(args.config)).load()
     else:

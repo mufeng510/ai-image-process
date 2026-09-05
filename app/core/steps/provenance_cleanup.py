@@ -40,11 +40,19 @@ def _try_remove_ai_watermarks(src: Path, dest: Path, mode: str = "metadata") -> 
     Returns output path on success, None if package missing.
     """
     try:
-        # Public package exposes CLI primarily; try common module entrypoints.
         import importlib
 
+        # Current versions expose a batch API (works in frozen apps too).
+        try:
+            api = importlib.import_module("remove_ai_watermarks.api")
+        except ImportError:
+            api = None
+        if api is not None and hasattr(api, "remove_batch"):
+            return _run_remove_batch(api, src, dest, mode)
+
+        # Legacy versions exposed per-file helpers on the package modules.
         mod = None
-        for name in ("remove_ai_watermarks", "remove_ai_watermarks.cli", "remove_ai_watermarks.api"):
+        for name in ("remove_ai_watermarks", "remove_ai_watermarks.cli"):
             try:
                 mod = importlib.import_module(name)
                 break
@@ -104,3 +112,23 @@ def _try_remove_ai_watermarks(src: Path, dest: Path, mode: str = "metadata") -> 
         return dest
     except ImportError:
         return None
+
+
+def _run_remove_batch(api, src: Path, dest: Path, mode: str) -> Path:
+    """Clean one file via the library batch API (no subprocess needed)."""
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    isolated_in = dest.parent / "_in"
+    isolated_out = dest.parent / "_out"
+    isolated_in.mkdir(exist_ok=True)
+    isolated_out.mkdir(exist_ok=True)
+    single = isolated_in / src.name
+    shutil.copy2(src, single)
+    summary = api.remove_batch(str(isolated_in), str(isolated_out), mode=mode)
+    outputs = [p for p in isolated_out.rglob("*") if p.is_file()]
+    if getattr(summary, "failed", 0) or not outputs:
+        errors = "; ".join(str(e) for e in list(getattr(summary, "errors", []) or [])[:3])
+        raise RuntimeError(f"remove-ai-watermarks 清理失败：{errors or 'no output'}")
+    out = outputs[0]
+    if out != dest:
+        shutil.copy2(out, dest)
+    return dest

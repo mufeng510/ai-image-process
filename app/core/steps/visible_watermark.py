@@ -29,7 +29,8 @@ class VisibleWatermarkStep(Step):
         except Exception:  # noqa: BLE001
             issues.append(
                 "remove-ai-watermarks 未安装，可见水印去除将失败；"
-                '请安装: pip install "remove-ai-watermarks[visible]"'
+                "可在「设置 → 处理 → 去除可见水印」点击“安装依赖”在线安装，"
+                '或执行: pip install "remove-ai-watermarks[visible]"'
             )
         return issues
 

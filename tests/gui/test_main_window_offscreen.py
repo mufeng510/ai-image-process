@@ -82,3 +82,36 @@ def test_settings_export_import(qapp, tmp_path: Path):
     raw = json.loads(export_path.read_text(encoding="utf-8"))
     assert raw["naming"]["template"] == "{datetime}_{original_name}"
     dlg.close()
+
+
+def test_settings_offers_install_for_both_raiw_features(qapp):
+    """Both remove-ai-watermarks-backed features expose an in-app installer."""
+    from app.core import dependency_installer
+
+    cfg = default_config()
+    dlg = SettingsDialog(cfg)
+    assert dlg.btn_install_prov.isVisible() or dlg.btn_install_prov.toolTip()
+    assert dlg.btn_install_visible.isVisible() or dlg.btn_install_visible.toolTip()
+    assert dlg.btn_install_prov.toolTip() == (
+        f'在线安装 {dependency_installer.FEATURE_SPECS["provenance"]}（本功能所需）'
+    )
+    assert dlg.btn_install_visible.toolTip() == (
+        f'在线安装 {dependency_installer.FEATURE_SPECS["visible"]}（本功能所需，含 cv2 后端）'
+    )
+    dlg.close()
+
+
+def test_settings_dependency_status_reflects_package_state(qapp):
+    from app.core import visible_models
+
+    cfg = default_config()
+    dlg = SettingsDialog(cfg)
+    st = visible_models.package_status()
+    if st.importable:
+        assert "已安装" in dlg.prov_status.text()
+    else:
+        assert "未安装" in dlg.prov_status.text()
+        assert "安装依赖" in dlg.prov_status.text()
+    # onnx install button enabled only when the package exists but onnx is missing
+    assert dlg.btn_install_onnx.isEnabled() == (st.importable and not st.onnx_ready)
+    dlg.close()

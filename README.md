@@ -27,14 +27,15 @@ python3 -m venv .venv
 - 后台线程处理、进度、日志、取消
 - 设置（常规 / 处理 / 高级 / 关于）
 
-## 去除可见水印（可选）
+## remove-ai-watermarks 依赖（可选，软件内安装）
 
-基于 [remove-ai-watermarks](https://github.com/wiltodelta/remove-ai-watermarks) 的 `visible` 模式，可去除 Gemini、豆包、即梦等已注册的可见 AI 标记：
+"清理 AI Metadata" 与 "去除可见水印" 两个功能基于
+[remove-ai-watermarks](https://github.com/wiltodelta/remove-ai-watermarks)：
 
-```bash
-.venv/bin/pip install "remove-ai-watermarks[visible]"
-```
-
+- **软件内安装（推荐）**：在「设置 → 处理」中，两个功能各自提供 **安装依赖** 按钮，
+  点击即可在线安装对应依赖（清理 Metadata 需基础包；去除可见水印需 `[visible]` extra；
+  migan/lama 后端可一键安装 `[migan]` 支持），安装完成后无需重启即可使用
+- 命令行方式（源码运行时）：`.venv/bin/pip install "remove-ai-watermarks[visible]"`
 - 默认 `cv2` 后端无需模型；步骤默认关闭，在主界面或设置中启用
 - 可选 `migan` / `lama` 神经网络修复后端需要下载模型权重：**软件不预置模型**，
   可在「设置 → 处理 → 去除可见水印」页面手动下载（缓存于本机 Hugging Face 缓存目录），

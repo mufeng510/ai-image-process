@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 from app.config.manager import ConfigManager
 from app.config.paths import user_config_dir
 from app.config.schema import AppConfig, default_config
+from app.core.dependency_installer import ensure_runtime_site
 from app.core.models import JobResult, ProgressEvent, ProgressKind
 from app.gui.widgets.drop_zone import DropZone
 from app.gui.workers.pipeline_worker import PipelineController
@@ -41,6 +42,9 @@ class MainWindow(QMainWindow):
             self._config = self._cfg_mgr.load()
         except Exception:  # noqa: BLE001
             self._config = default_config()
+        # Pick up packages previously installed from within the app before
+        # any lazy import of remove_ai_watermarks can happen.
+        ensure_runtime_site(self._config.runtime.portable_mode)
 
         self._inputs: list[Path] = []
         self._controller = PipelineController(self)

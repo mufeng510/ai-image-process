@@ -42,6 +42,7 @@ hiddenimports = [
     "app.core",
     "app.core.pipeline",
     "app.core.steps",
+    "app.core.dependency_installer",
     "app.config",
     "PIL",
     "PIL.Image",
@@ -57,6 +58,20 @@ for pkg in ("PySide6", "shiboken6"):
         hiddenimports += h
     except Exception:
         pass
+
+# Bundle pip so the app can install optional dependencies (e.g.
+# remove-ai-watermarks) at runtime into a user-writable directory.
+try:
+    d, b, h = collect_all("pip")
+    datas += d
+    binaries += b
+    hiddenimports += h
+except Exception:
+    pass
+
+# TLS support and sysconfig are required by pip's network installs but
+# may not be pulled in by the app's own imports.
+hiddenimports += ["ssl", "sysconfig"]
 
 a = Analysis(
     [str(run_gui)],

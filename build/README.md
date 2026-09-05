@@ -71,5 +71,6 @@ git push origin v0.1.0
 - Prefer onedir over onefile for ExifTool/Qt reliability.
 - Do not rely on user PATH for ExifTool/ImageMagick.
 - Non-Windows ExifTool bundling is best-effort and must not fail packaging.
-- `remove-ai-watermarks` is optional and can significantly increase size; enable deliberately.
+- `remove-ai-watermarks` is optional and not bundled; pip **is** bundled so
+  end users can install it from within the app (Settings → Processing).
 - No Apple codesign/notarization in this pipeline.

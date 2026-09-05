@@ -5,11 +5,10 @@ from copy import deepcopy
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QThread, QUrl, Signal, Slot
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtGui import QDesktopServices, QGuiApplication
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
-    QDesktopWidget,
     QDialog,
     QDialogButtonBox,
     QFileDialog,
@@ -31,7 +30,7 @@ from PySide6.QtWidgets import (
 from app.config.manager import ConfigManager
 from app.config.paths import phones_json_path, user_config_dir
 from app.config.schema import AppConfig, default_config
-from app.core import visible_models
+from app.core import dependency_installer, visible_models
 from app.core.device_library import DeviceLibrary
 from app.gui.naming_presets import NAMING_PRESETS, template_for_preset
 from app.version import __version__
@@ -58,6 +57,31 @@ class ModelDownloadWorker(QObject):
             self.failed.emit(self._backend, str(exc))
 
 
+class PipInstallWorker(QObject):
+    """Runs an in-app pip install of a feature dependency off the UI thread."""
+
+    progress = Signal(str)  # one pip log line
+    ok = Signal(str)  # feature
+    failed = Signal(str, str)  # feature, error
+
+    def __init__(
+        self, feature: str, portable_mode: bool = False, parent: QObject | None = None
+    ) -> None:
+        super().__init__(parent)
+        self._feature = feature
+        self._portable = portable_mode
+
+    @Slot()
+    def run(self) -> None:
+        try:
+            dependency_installer.install_feature(
+                self._feature, log=self.progress.emit, portable_mode=self._portable
+            )
+            self.ok.emit(self._feature)
+        except Exception as exc:  # noqa: BLE001
+            self.failed.emit(self._feature, str(exc))
+
+
 class SettingsDialog(QDialog):
     """Edit AppConfig with full tabs and import/export/reset."""
 
@@ -68,6 +92,9 @@ class SettingsDialog(QDialog):
         self._devices: list[tuple[str, str]] = []  # (id, label)
         self._dl_thread: QThread | None = None
         self._dl_worker: ModelDownloadWorker | None = None
+        self._ins_thread: QThread | None = None
+        self._ins_worker: PipInstallWorker | None = None
+        self._ins_feature: str = ""
         self._load_devices()
 
         root = QVBoxLayout(self)
@@ -108,9 +135,13 @@ class SettingsDialog(QDialog):
         return self._config
 
     def _fit_to_screen(self) -> None:
-        screen = QDesktopWidget().screenGeometry()
-        max_w = int(screen.width() * 0.85)
-        max_h = int(screen.height() * 0.85)
+        screen = QGuiApplication.primaryScreen()
+        if screen is not None:
+            geometry = screen.geometry()
+            max_w = int(geometry.width() * 0.85)
+            max_h = int(geometry.height() * 0.85)
+        else:  # no screen (offscreen tests); keep sane defaults
+            max_w, max_h = 620, 560
         self.resize(min(620, max_w), min(560, max_h))
         self.setMaximumSize(max_w, max_h)
 
@@ -204,6 +235,19 @@ class SettingsDialog(QDialog):
         note.setWordWrap(True)
         note.setStyleSheet("color:#666;font-size:11px;")
         pf.addRow(note)
+        self.prov_status = QLabel()
+        self.prov_status.setWordWrap(True)
+        self.prov_status.setStyleSheet("color:#666;font-size:11px;")
+        pf.addRow("状态", self.prov_status)
+        prov_dep_row = QHBoxLayout()
+        self.btn_install_prov = QPushButton("安装依赖")
+        self.btn_install_prov.setToolTip(
+            f'在线安装 {dependency_installer.FEATURE_SPECS["provenance"]}（本功能所需）'
+        )
+        self.btn_install_prov.clicked.connect(lambda: self._install_dependency("provenance"))
+        prov_dep_row.addWidget(self.btn_install_prov)
+        prov_dep_row.addStretch(1)
+        pf.addRow("依赖安装", prov_dep_row)
         layout.addWidget(prov)
 
         # Visible watermark removal
@@ -230,10 +274,27 @@ class SettingsDialog(QDialog):
         dl_row.addWidget(self.btn_dl_lama)
         dl_row.addStretch(1)
         vf.addRow("模型下载", dl_row)
+        vis_dep_row = QHBoxLayout()
+        self.btn_install_visible = QPushButton("安装依赖")
+        self.btn_install_visible.setToolTip(
+            f'在线安装 {dependency_installer.FEATURE_SPECS["visible"]}（本功能所需，含 cv2 后端）'
+        )
+        self.btn_install_visible.clicked.connect(lambda: self._install_dependency("visible"))
+        self.btn_install_onnx = QPushButton("安装 migan/lama 支持")
+        self.btn_install_onnx.setToolTip(
+            f'在线安装 {dependency_installer.FEATURE_SPECS["onnxruntime"]}'
+            "（migan/lama 填充后端所需：onnxruntime + 模型下载支持）"
+        )
+        self.btn_install_onnx.clicked.connect(lambda: self._install_dependency("onnxruntime"))
+        vis_dep_row.addWidget(self.btn_install_visible)
+        vis_dep_row.addWidget(self.btn_install_onnx)
+        vis_dep_row.addStretch(1)
+        vf.addRow("依赖安装", vis_dep_row)
         vis_note = QLabel(
             "软件不预置任何模型；默认 cv2 后端无需模型即可工作。"
-            "migan/lama 为可选的神经网络修复后端，模型由用户在此页面手动下载，"
-            "下载后缓存于本机（Hugging Face 缓存目录），首次使用也会自动下载。"
+            "本功能依赖 remove-ai-watermarks，可点击上方“安装依赖”在线安装；"
+            "migan/lama 为可选的神经网络修复后端，需先安装 onnxruntime 再下载模型，"
+            "模型缓存于本机（Hugging Face 缓存目录），首次使用也会自动下载。"
         )
         vis_note.setWordWrap(True)
         vis_note.setStyleSheet("color:#666;font-size:11px;")
@@ -415,16 +476,28 @@ class SettingsDialog(QDialog):
         "unknown": "状态未知",
     }
 
+    def _refresh_prov_status(self) -> None:
+        st = visible_models.package_status()
+        if st.importable:
+            self.prov_status.setText(
+                f"remove-ai-watermarks v{st.version or '?'} 已安装，本功能可用。"
+            )
+        else:
+            self.prov_status.setText(
+                "remove-ai-watermarks 未安装：未启用本功能时该步骤自动跳过；"
+                "启用后将仅复制原图。点击“安装依赖”在线安装。"
+            )
+
     def _refresh_visible_status(self) -> None:
         st = visible_models.package_status()
         if not st.importable:
             self.visible_status.setText(
-                'remove-ai-watermarks 未安装，启用后该步骤会失败。安装：pip install "remove-ai-watermarks[visible]"'
+                "remove-ai-watermarks 未安装，启用后该步骤会失败。点击“安装依赖”在线安装。"
             )
         elif not st.visible_ready:
             ver = st.version or "?"
             self.visible_status.setText(
-                f"已安装 v{ver}，但缺少像素运行时。安装：pip install \"remove-ai-watermarks[visible]\""
+                f"已安装 v{ver}，但缺少像素运行时。请点击“安装依赖”重新安装完整依赖。"
             )
         else:
             ver = st.version or "?"
@@ -433,15 +506,89 @@ class SettingsDialog(QDialog):
                 ms = visible_models.model_status(backend)
                 parts.append(f"{backend}: {self._MODEL_STATUS_TEXT.get(ms, ms)}")
             if not st.onnx_ready:
-                parts.append('（migan/lama 需 onnxruntime：pip install "remove-ai-watermarks[migan]"）')
+                parts.append("migan/lama 需先安装后端支持（点击下方按钮）")
             self.visible_status.setText("；".join(parts))
+        self.btn_install_onnx.setEnabled(st.importable and not st.onnx_ready)
         ready = st.visible_ready and st.onnx_ready
         self.btn_dl_migan.setEnabled(ready)
         self.btn_dl_lama.setEnabled(ready)
 
+    def _refresh_dependency_status(self) -> None:
+        self._refresh_prov_status()
+        self._refresh_visible_status()
+
+    # ----- in-app dependency installation -----
+    def _install_status_label(self, feature: str) -> QLabel:
+        return self.prov_status if feature == "provenance" else self.visible_status
+
+    def _busy(self) -> bool:
+        return bool(
+            (self._dl_thread is not None and self._dl_thread.isRunning())
+            or (self._ins_thread is not None and self._ins_thread.isRunning())
+        )
+
+    def _set_install_busy(self, busy: bool) -> None:
+        # Never run pip and the model download concurrently: pip may be
+        # (re)installing the very package the download imports.
+        for btn in (
+            self.btn_install_prov,
+            self.btn_install_visible,
+            self.btn_install_onnx,
+            self.btn_dl_migan,
+            self.btn_dl_lama,
+        ):
+            btn.setEnabled(not busy)
+        if not busy:
+            self._refresh_dependency_status()
+
+    def _install_dependency(self, feature: str) -> None:
+        if self._busy():
+            QMessageBox.information(self, "任务进行中", "已有安装/下载任务正在进行，请稍候。")
+            return
+        self._ins_feature = feature
+        self._set_install_busy(True)
+        label = dependency_installer.feature_label(feature)
+        spec = dependency_installer.feature_spec(feature)
+        self._install_status_label(feature).setText(
+            f"正在安装 {spec} …（完成后自动刷新状态，期间可关闭本窗口）"
+        )
+        self._ins_thread = QThread(self)
+        self._ins_worker = PipInstallWorker(feature, self._config.runtime.portable_mode)
+        self._ins_worker.moveToThread(self._ins_thread)
+        self._ins_thread.started.connect(self._ins_worker.run)
+        self._ins_worker.progress.connect(self._on_install_progress)
+        self._ins_worker.ok.connect(self._on_install_ok)
+        self._ins_worker.failed.connect(self._on_install_failed)
+        self._ins_worker.ok.connect(self._ins_thread.quit)
+        self._ins_worker.failed.connect(self._ins_thread.quit)
+        self._ins_thread.finished.connect(self._ins_worker.deleteLater)
+        self._ins_thread.finished.connect(self._on_install_thread_finished)
+        self._ins_thread.start()
+
+    @Slot(str)
+    def _on_install_progress(self, line: str) -> None:
+        self._install_status_label(self._ins_feature).setText(f"正在安装：{line.strip()}")
+
+    @Slot(str)
+    def _on_install_ok(self, feature: str) -> None:
+        label = dependency_installer.feature_label(feature)
+        self._install_status_label(feature).setText(f"{label} 依赖安装完成，无需重启即可使用。")
+        QMessageBox.information(self, "安装成功", f"{label} 依赖已安装完成，现在即可使用对应功能。")
+
+    @Slot(str, str)
+    def _on_install_failed(self, feature: str, error: str) -> None:
+        label = dependency_installer.feature_label(feature)
+        self._install_status_label(feature).setText(f"{label} 依赖安装失败：{error}")
+
+    @Slot()
+    def _on_install_thread_finished(self) -> None:
+        self._ins_thread = None
+        self._ins_worker = None
+        self._set_install_busy(False)
+
     def _download_visible_model(self, backend: str) -> None:
-        if getattr(self, "_dl_thread", None) is not None and self._dl_thread.isRunning():
-            QMessageBox.information(self, "下载中", "已有模型下载任务正在进行，请稍候。")
+        if self._busy():
+            QMessageBox.information(self, "任务进行中", "已有安装/下载任务正在进行，请稍候。")
             return
         self._set_download_busy(backend, True)
         self.visible_status.setText(f"正在下载 {backend} 模型…（完成后可关闭本窗口）")
@@ -565,7 +712,7 @@ class SettingsDialog(QDialog):
         self.chk_visible.setChecked(cfg.steps.visible_watermark.enabled)
         vbidx = self.visible_backend.findData(cfg.steps.visible_watermark.backend)
         self.visible_backend.setCurrentIndex(max(0, vbidx))
-        self._refresh_visible_status()
+        self._refresh_dependency_status()
 
         self.chk_reenc.setChecked(cfg.steps.reencode.enabled)
         self.qmin.setValue(cfg.steps.reencode.quality_min)

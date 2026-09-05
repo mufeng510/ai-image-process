@@ -1,15 +1,18 @@
 """Tests for the provenance cleanup step."""
 import builtins
+import shutil
 import subprocess
+import types
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
 from PIL import Image
 
 from app.config.schema import AppConfig, default_config
 from app.core.models import FileRecord, JobWorkspace, StepResult
 from app.core.steps.base import StepContext
-from app.core.steps.provenance_cleanup import ProvenanceCleanupStep
+from app.core.steps.provenance_cleanup import ProvenanceCleanupStep, _run_remove_batch
 
 
 def _make_workspace(tmp_path: Path) -> JobWorkspace:
@@ -87,3 +90,49 @@ def test_provenance_cleanup_subprocess_fallback_blocked_when_frozen(tmp_path: Pa
     assert isinstance(result, StepResult)
     assert not result.ok
     assert "打包模式" in (result.error or "")
+
+
+class _FakeSummary:
+    def __init__(self, processed=1, failed=0, errors=None):
+        self.processed = processed
+        self.failed = failed
+        self.errors = errors or []
+
+
+def test_run_remove_batch_cleans_and_outputs(tmp_path: Path):
+    """The current remove-ai-watermarks batch API is driven correctly."""
+    src = tmp_path / "sample.png"
+    Image.new("RGB", (32, 32), color=(10, 20, 30)).save(src)
+    work = tmp_path / "work"
+    work.mkdir()
+    dest = work / "0001_clean.png"
+
+    seen = {}
+
+    def fake_remove_batch(indir, outdir, mode="metadata"):
+        seen["mode"] = mode
+        out = Path(outdir) / src.name
+        shutil.copy2(src, out)
+        return _FakeSummary()
+
+    api = types.SimpleNamespace(remove_batch=fake_remove_batch)
+    result = _run_remove_batch(api, src, dest, "metadata")
+    assert seen["mode"] == "metadata"
+    assert result == dest
+    assert dest.exists()
+
+
+def test_run_remove_batch_raises_on_failed_summary(tmp_path: Path):
+    src = tmp_path / "sample.png"
+    Image.new("RGB", (32, 32), color=(10, 20, 30)).save(src)
+    work = tmp_path / "work"
+    work.mkdir()
+    dest = work / "0001_clean.png"
+
+    def fake_remove_batch(indir, outdir, mode="metadata"):
+        return _FakeSummary(processed=0, failed=1, errors=["boom"])
+
+    api = types.SimpleNamespace(remove_batch=fake_remove_batch)
+    with pytest.raises(RuntimeError) as excinfo:
+        _run_remove_batch(api, src, dest, "metadata")
+    assert "boom" in str(excinfo.value)
