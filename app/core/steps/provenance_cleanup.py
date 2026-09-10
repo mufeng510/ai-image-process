@@ -86,13 +86,14 @@ def _try_remove_ai_watermarks(src: Path, dest: Path, mode: str = "metadata") -> 
             )
 
         dest.parent.mkdir(parents=True, exist_ok=True)
-        # batch-like single file via CLI if present on module
-        cmd = [sys.executable, "-m", "remove_ai_watermarks", "batch", str(src.parent), "-o", str(dest.parent), "--mode", mode]
-        # For single-file safety, copy into isolated incoming then batch that dir.
         isolated_in = dest.parent / "_in"
         isolated_out = dest.parent / "_out"
-        isolated_in.mkdir(exist_ok=True)
-        isolated_out.mkdir(exist_ok=True)
+        if isolated_in.exists():
+            shutil.rmtree(isolated_in)
+        if isolated_out.exists():
+            shutil.rmtree(isolated_out)
+        isolated_in.mkdir(parents=True, exist_ok=True)
+        isolated_out.mkdir(parents=True, exist_ok=True)
         single = isolated_in / src.name
         shutil.copy2(src, single)
         cmd = [sys.executable, "-m", "remove_ai_watermarks", "batch", str(isolated_in), "-o", str(isolated_out), "--mode", mode]
@@ -119,8 +120,13 @@ def _run_remove_batch(api, src: Path, dest: Path, mode: str) -> Path:
     dest.parent.mkdir(parents=True, exist_ok=True)
     isolated_in = dest.parent / "_in"
     isolated_out = dest.parent / "_out"
-    isolated_in.mkdir(exist_ok=True)
-    isolated_out.mkdir(exist_ok=True)
+    # Clean stale directories from previous iterations so outputs[0] is correct.
+    if isolated_in.exists():
+        shutil.rmtree(isolated_in)
+    if isolated_out.exists():
+        shutil.rmtree(isolated_out)
+    isolated_in.mkdir(parents=True, exist_ok=True)
+    isolated_out.mkdir(parents=True, exist_ok=True)
     single = isolated_in / src.name
     shutil.copy2(src, single)
     summary = api.remove_batch(str(isolated_in), str(isolated_out), mode=mode)
