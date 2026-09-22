@@ -65,7 +65,14 @@ class SimpleStepConfig:
 
 
 @dataclass
+class DeduplicateStepConfig:
+    enabled: bool = True
+    algorithm: str = "md5"  # md5, sha1, sha256
+
+
+@dataclass
 class StepsConfig:
+    deduplicate: DeduplicateStepConfig = field(default_factory=DeduplicateStepConfig)
     provenance_cleanup: ProvenanceStepConfig = field(default_factory=ProvenanceStepConfig)
     visible_watermark: VisibleWatermarkStepConfig = field(default_factory=VisibleWatermarkStepConfig)
     reencode: ReencodeStepConfig = field(default_factory=ReencodeStepConfig)
@@ -116,6 +123,7 @@ class AppConfig:
         naming = NamingConfig(**{k: v for k, v in data.get("naming", {}).items() if k in NamingConfig.__dataclass_fields__})
         steps_raw = data.get("steps", {})
         steps = StepsConfig(
+            deduplicate=DeduplicateStepConfig(**_filter(steps_raw.get("deduplicate", {}), DeduplicateStepConfig)),
             provenance_cleanup=ProvenanceStepConfig(**_filter(steps_raw.get("provenance_cleanup", {}), ProvenanceStepConfig)),
             visible_watermark=VisibleWatermarkStepConfig(**_filter(steps_raw.get("visible_watermark", {}), VisibleWatermarkStepConfig)),
             reencode=ReencodeStepConfig(**_filter(steps_raw.get("reencode", {}), ReencodeStepConfig)),

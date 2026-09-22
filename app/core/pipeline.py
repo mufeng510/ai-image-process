@@ -21,6 +21,7 @@ from app.core.models import (
 )
 from app.core.registry import StepRegistry
 from app.core.steps.base import StepContext
+from app.core.steps.deduplicate import DeduplicateStep, deduplicate_records
 from app.core.steps.device_metadata import DeviceMetadataStep
 from app.core.steps.input_normalize import collect_inputs, to_records
 from app.core.steps.output_write import OutputWriteStep
@@ -32,6 +33,7 @@ from app.core.temp_manager import TempManager
 
 
 DEFAULT_STEP_ORDER = [
+    "deduplicate",
     "provenance_cleanup",
     "visible_watermark",
     "reencode",
@@ -44,6 +46,7 @@ DEFAULT_STEP_ORDER = [
 def build_default_registry() -> StepRegistry:
     reg = StepRegistry()
     for step in (
+        DeduplicateStep(),
         ProvenanceCleanupStep(),
         VisibleWatermarkStep(),
         ReencodeStep(),
@@ -101,6 +104,11 @@ def run_job(
     result = JobResult(job_id=job_id)
     emit(ProgressKind.JOB_STARTED, message=f"job {job_id} started", index=0)
 
+    if config.steps.deduplicate.enabled:
+        records, dup_count = deduplicate_records(records, config.steps.deduplicate.algorithm)
+        if dup_count > 0:
+            emit(ProgressKind.LOG, message=f"Deduplication: removed {dup_count} duplicate file(s)")
+
     if not records:
         emit(ProgressKind.JOB_FINISHED, message="no input files")
         if config.runtime.cleanup_temp_on_success:
@@ -128,6 +136,7 @@ def run_job(
     }
 
     steps = [s for s in registry.ordered(DEFAULT_STEP_ORDER) if s.enabled(config)]
+    per_file_steps = [s for s in steps if s.id != "deduplicate"]
     for step in steps:
         for issue in step.validate(config):
             emit(ProgressKind.LOG, message=f"validation [{step.id}]: {issue}")
@@ -146,7 +155,7 @@ def run_job(
             incoming.write_bytes(record.source_path.read_bytes())
             record.current_path = incoming
 
-            for step in steps:
+            for step in per_file_steps:
                 emit(ProgressKind.STEP_STARTED, file_path=record.source_path, step_id=step.id, index=idx)
                 step_res = step.run(StepContext(config=config, workspace=workspace, record=record, resources=resources))
                 file_result.step_results.append(step_res)
