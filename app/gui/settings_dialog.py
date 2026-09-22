@@ -223,6 +223,22 @@ class SettingsDialog(QDialog):
         page = QWidget()
         layout = QVBoxLayout(page)
 
+        # Deduplication
+        dedup = QGroupBox("文件去重")
+        dpf = QFormLayout(dedup)
+        self.chk_dedup = QCheckBox("启用此步骤")
+        dpf.addRow(self.chk_dedup)
+        self.dedup_algorithm = QComboBox()
+        self.dedup_algorithm.addItem("MD5（推荐，速度快）", "md5")
+        self.dedup_algorithm.addItem("SHA-1", "sha1")
+        self.dedup_algorithm.addItem("SHA-256（最安全，较慢）", "sha256")
+        dpf.addRow("哈希算法", self.dedup_algorithm)
+        dedup_note = QLabel("通过文件内容哈希去重，重复文件仅保留第一张。")
+        dedup_note.setWordWrap(True)
+        dedup_note.setStyleSheet("color:#666;font-size:11px;")
+        dpf.addRow(dedup_note)
+        layout.addWidget(dedup)
+
         # Provenance
         prov = QGroupBox("清理 AI Metadata")
         pf = QFormLayout(prov)
@@ -705,6 +721,10 @@ class SettingsDialog(QDialog):
         self.chk_cleanup_success.setChecked(cfg.runtime.cleanup_temp_on_success)
         self.chk_cleanup_startup.setChecked(cfg.runtime.cleanup_temp_on_startup)
 
+        self.chk_dedup.setChecked(cfg.steps.deduplicate.enabled)
+        daidx = self.dedup_algorithm.findData(cfg.steps.deduplicate.algorithm)
+        self.dedup_algorithm.setCurrentIndex(max(0, daidx))
+
         self.chk_prov.setChecked(cfg.steps.provenance_cleanup.enabled)
         midx = self.prov_mode.findData(cfg.steps.provenance_cleanup.mode)
         self.prov_mode.setCurrentIndex(max(0, midx))
@@ -772,6 +792,9 @@ class SettingsDialog(QDialog):
         cfg.runtime.portable_mode = self.chk_portable.isChecked()
         cfg.runtime.worker_count = 1
         cfg.runtime.log_level = str(self.log_level.currentData() or "info")
+
+        cfg.steps.deduplicate.enabled = self.chk_dedup.isChecked()
+        cfg.steps.deduplicate.algorithm = str(self.dedup_algorithm.currentData() or "md5")
 
         cfg.steps.provenance_cleanup.enabled = self.chk_prov.isChecked()
         cfg.steps.provenance_cleanup.mode = str(self.prov_mode.currentData() or "metadata")
