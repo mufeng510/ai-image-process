@@ -50,6 +50,21 @@ FEATURE_LABELS: dict[str, str] = {
 
 SITE_DIR_NAME = "python-packages"
 
+PIP_LOG_NAME = "ai-image-process-pip.log"
+# 失败时展示的 pip 输出长度上限（字符），避免弹窗过长。
+ERROR_TAIL_CHARS = 2000
+
+
+def pip_log_path() -> Path:
+    """pip 详细日志文件路径（in-process 安装写入此文件）。"""
+    return Path(tempfile.gettempdir()) / PIP_LOG_NAME
+
+
+def manual_install_command(specs: list[str]) -> str:
+    """返回用户可手动执行的安装命令（含引号，处理 extra 写法）。"""
+    quoted = " ".join(f'"{s}"' for s in specs)
+    return f"pip install {quoted}"
+
 
 def feature_spec(feature: str) -> str:
     try:
@@ -178,7 +193,7 @@ def _run_pip_inprocess(specs: list[str], target: Path, log: Callable[[str], None
     buffer for the duration and pip's own --log file is kept as a fallback
     source for error details.
     """
-    logfile = Path(tempfile.gettempdir()) / "ai-image-process-pip.log"
+    logfile = pip_log_path()
     args = [
         *_pip_common_args(),
         *_target_args(target),
@@ -205,11 +220,13 @@ def _run_pip_inprocess(specs: list[str], target: Path, log: Callable[[str], None
 
     detail = ""
     try:
-        detail = logfile.read_text(encoding="utf-8", errors="replace")[-2000:]
+        detail = logfile.read_text(encoding="utf-8", errors="replace")[-ERROR_TAIL_CHARS:]
     except OSError:
-        detail = buf.getvalue()[-2000:]
+        detail = buf.getvalue()[-ERROR_TAIL_CHARS:]
     raise RuntimeError(
         f"pip 退出码 {rc}，安装失败。详情：\n{detail or '（无输出）'}"
+        f"\n\n完整日志：{logfile}"
+        f"\n手动安装：{manual_install_command(specs)}"
     )
 
 
@@ -237,14 +254,25 @@ def _run_pip_subprocess(
             creationflags=CREATE_NO_WINDOW,
         )
     except OSError as exc:
-        raise RuntimeError(f"无法启动 pip（{base}）：{exc}") from exc
+        raise RuntimeError(
+            f"无法启动 pip（{base}）：{exc}"
+            f"\n手动安装：{manual_install_command(specs)}"
+        ) from exc
     assert proc.stdout is not None
+    taillines: list[str] = []
     with proc.stdout:
         for line in proc.stdout:
             _emit(log, line)
+            taillines.append(line)
+            if len(taillines) > 200:
+                del taillines[0]
     rc = proc.wait()
     if rc != 0:
-        raise RuntimeError(f"pip 退出码 {rc}，安装失败")
+        tail = "".join(taillines)[-ERROR_TAIL_CHARS:].strip() or "（无输出）"
+        raise RuntimeError(
+            f"pip 退出码 {rc}，安装失败。详情：\n{tail}"
+            f"\n\n手动安装：{manual_install_command(specs)}"
+        )
 
 
 def install_specs(specs: list[str], log: Callable[[str], None] | None = None, portable_mode: bool = False) -> None:
@@ -264,7 +292,7 @@ def install_specs(specs: list[str], log: Callable[[str], None] | None = None, po
             raise RuntimeError(
                 "软件内置安装器不可用，且未在系统中找到与运行时匹配的 Python "
                 f"{_frozen_version()}（需含 pip）。请安装匹配版本的 Python 后重试，"
-                "或手动执行：pip install " + " ".join(specs)
+                "或手动执行：" + manual_install_command(specs)
             ) from None
         _run_pip_subprocess(base, specs, target, log)
         return

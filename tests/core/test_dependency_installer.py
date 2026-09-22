@@ -121,6 +121,9 @@ def test_target_args_force_wheels_and_target(tmp_path):
 
 def test_find_system_python_takes_first_match(monkeypatch):
     monkeypatch.setattr(
+        di, "_system_python_candidates", lambda: [["python3.12"], ["python3"]]
+    )
+    monkeypatch.setattr(
         di, "_check_system_python", lambda cand: cand == ["python3.12"]
     )
     assert di._find_system_python() == ["python3.12"]

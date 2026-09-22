@@ -95,6 +95,8 @@ class SettingsDialog(QDialog):
         self._ins_thread: QThread | None = None
         self._ins_worker: PipInstallWorker | None = None
         self._ins_feature: str = ""
+        self._ins_log: list[str] = []
+        self._ins_error: str = ""
         self._load_devices()
 
         root = QVBoxLayout(self)
@@ -562,6 +564,8 @@ class SettingsDialog(QDialog):
             QMessageBox.information(self, "任务进行中", "已有安装/下载任务正在进行，请稍候。")
             return
         self._ins_feature = feature
+        self._ins_log = []
+        self._ins_error = ""
         self._set_install_busy(True)
         label = dependency_installer.feature_label(feature)
         spec = dependency_installer.feature_spec(feature)
@@ -583,10 +587,16 @@ class SettingsDialog(QDialog):
 
     @Slot(str)
     def _on_install_progress(self, line: str) -> None:
-        self._install_status_label(self._ins_feature).setText(f"正在安装：{line.strip()}")
+        text = line.strip()
+        if text:
+            self._ins_log.append(text)
+            if len(self._ins_log) > 500:
+                del self._ins_log[0]
+        self._install_status_label(self._ins_feature).setText(f"正在安装：{text}")
 
     @Slot(str)
     def _on_install_ok(self, feature: str) -> None:
+        self._ins_error = ""
         label = dependency_installer.feature_label(feature)
         self._install_status_label(feature).setText(f"{label} 依赖安装完成，无需重启即可使用。")
         QMessageBox.information(self, "安装成功", f"{label} 依赖已安装完成，现在即可使用对应功能。")
@@ -594,13 +604,52 @@ class SettingsDialog(QDialog):
     @Slot(str, str)
     def _on_install_failed(self, feature: str, error: str) -> None:
         label = dependency_installer.feature_label(feature)
-        self._install_status_label(feature).setText(f"{label} 依赖安装失败：{error}")
+        spec = dependency_installer.feature_spec(feature)
+        manual = dependency_installer.manual_install_command([spec])
+        self._ins_error = error.strip() or "未知错误"
+        short = self._ins_error if len(self._ins_error) <= 500 else self._ins_error[:500] + "…"
+        self._install_status_label(feature).setText(
+            f"{label} 依赖安装失败：{short}\n手动安装：{manual}"
+        )
+        log_text = "\n".join(self._ins_log[-100:])
+        detail_parts = []
+        if log_text:
+            detail_parts.append("---- pip 输出（最后 100 行）----\n" + log_text)
+        detail_parts.append("---- 错误 ----\n" + self._ins_error)
+        detail_parts.append("---- 手动安装 ----\n" + manual)
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Critical)
+        box.setWindowTitle("依赖安装失败")
+        box.setText(f"{label} 依赖安装失败。")
+        box.setInformativeText(
+            f"原因：{short}\n\n手动安装方法：\n{manual}\n\n（完整日志见下方“显示详情”，可选中复制）"
+        )
+        box.setDetailedText("\n\n".join(detail_parts))
+        copy_btn = box.addButton("复制手动安装命令", QMessageBox.ButtonRole.ActionRole)
+        box.addButton(QMessageBox.StandardButton.Close)
+        box.exec()
+        if box.clickedButton() == copy_btn:
+            clipboard = QGuiApplication.clipboard()
+            if clipboard is not None:
+                clipboard.setText(manual)
 
     @Slot()
     def _on_install_thread_finished(self) -> None:
         self._ins_thread = None
         self._ins_worker = None
         self._set_install_busy(False)
+        if self._ins_error:
+            label = dependency_installer.feature_label(self._ins_feature)
+            try:
+                spec = dependency_installer.feature_spec(self._ins_feature)
+                manual = dependency_installer.manual_install_command([spec])
+            except ValueError:
+                manual = ""
+            short = self._ins_error if len(self._ins_error) <= 500 else self._ins_error[:500] + "…"
+            text = f"{label} 依赖安装失败：{short}"
+            if manual:
+                text += f"\n手动安装：{manual}"
+            self._install_status_label(self._ins_feature).setText(text)
 
     def _download_visible_model(self, backend: str) -> None:
         if self._busy():
