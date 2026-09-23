@@ -57,7 +57,7 @@ QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q tests/gui
 
 ## 版本
 
-见 `app/version.py`（当前 `0.1.0`）。
+见 `app/version.py`（当前 `0.2.0`）。
 
 ## 计划
 
