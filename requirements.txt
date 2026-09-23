@@ -1,6 +1,7 @@
 Pillow>=10.0.0
 PySide6-Essentials>=6.6.0
 pytest>=8.0.0
+packaging>=24.2  # powers the in-app wheel installer
 # Optional provenance cleanup (metadata mode):
 # remove-ai-watermarks>=0.26.0
 # Optional visible watermark removal (model weights are NOT bundled;

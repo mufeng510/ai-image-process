@@ -12,6 +12,7 @@ license = { text = "MIT" }
 authors = [{ name = "沐风" }]
 dependencies = [
   "Pillow>=10.0.0",
+  "packaging>=24.2",
 ]
 
 [project.optional-dependencies]
