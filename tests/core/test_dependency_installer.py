@@ -6,6 +6,7 @@ from unittest.mock import patch
 import pytest
 
 from app.core import dependency_installer as di
+from app.core.wheel_installer import WheelInstallError
 
 
 def test_feature_specs_cover_both_features():
@@ -49,17 +50,17 @@ def test_install_specs_dev_uses_running_interpreter(monkeypatch):
     assert recorded["target"] is None
 
 
-def test_install_feature_frozen_prefers_bundled_pip(monkeypatch, tmp_path):
+def test_install_feature_frozen_uses_wheel_installer(monkeypatch, tmp_path):
     calls = {}
     site = tmp_path / "site"
     monkeypatch.setattr(di, "is_frozen", lambda: True)
     monkeypatch.setattr(di, "ensure_runtime_site", lambda portable_mode=False: site)
 
-    def fake_inprocess(specs, target, log):
+    def fake_wheel_install(specs, target, log):
         calls["specs"] = list(specs)
         calls["target"] = target
 
-    monkeypatch.setattr(di, "_run_pip_inprocess", fake_inprocess)
+    monkeypatch.setattr(di, "install_specs_to_target", fake_wheel_install)
     di.install_feature("visible", portable_mode=False)
     assert calls["specs"] == [di.FEATURE_SPECS["visible"]]
     assert calls["target"] == site
@@ -71,14 +72,10 @@ def test_install_feature_frozen_falls_back_to_system_python(monkeypatch, tmp_pat
     monkeypatch.setattr(di, "is_frozen", lambda: True)
     monkeypatch.setattr(di, "ensure_runtime_site", lambda portable_mode=False: site)
 
-    real_import = builtins.__import__
+    def raise_wheel_error(specs, target, log):
+        raise WheelInstallError("boom")
 
-    def no_pip_import(name, *args, **kwargs):
-        if name == "pip":
-            raise ImportError("pip not bundled")
-        return real_import(name, *args, **kwargs)
-
-    monkeypatch.setattr(builtins, "__import__", no_pip_import)
+    monkeypatch.setattr(di, "install_specs_to_target", raise_wheel_error)
     monkeypatch.setattr(di, "_find_system_python", lambda: ["py", "-3.12"])
     monkeypatch.setattr(
         di,
@@ -98,18 +95,40 @@ def test_install_specs_frozen_without_python_has_clear_error(monkeypatch, tmp_pa
     monkeypatch.setattr(di, "is_frozen", lambda: True)
     monkeypatch.setattr(di, "ensure_runtime_site", lambda portable_mode=False: site)
 
-    real_import = builtins.__import__
+    def raise_wheel_error(specs, target, log):
+        raise WheelInstallError("wheel installer failed")
 
-    def no_pip_import(name, *args, **kwargs):
-        if name == "pip":
-            raise ImportError("pip not bundled")
-        return real_import(name, *args, **kwargs)
-
-    monkeypatch.setattr(builtins, "__import__", no_pip_import)
+    monkeypatch.setattr(di, "install_specs_to_target", raise_wheel_error)
     monkeypatch.setattr(di, "_find_system_python", lambda: None)
     with pytest.raises(RuntimeError) as excinfo:
         di.install_specs(["some-pkg>=1.0"])
-    assert "pip install" in str(excinfo.value)
+    assert "手动安装" in str(excinfo.value)
+    assert "some-pkg>=1.0" in str(excinfo.value)
+
+
+def test_install_specs_frozen_subprocess_fallback_failure_appends_manual_cmd(monkeypatch, tmp_path):
+    """System python found but _run_pip_subprocess fails; final error includes manual command."""
+    site = tmp_path / "site"
+    monkeypatch.setattr(di, "is_frozen", lambda: True)
+    monkeypatch.setattr(di, "ensure_runtime_site", lambda portable_mode=False: site)
+
+    def raise_wheel_error(specs, target, log):
+        raise WheelInstallError("wheel installer failed")
+
+    monkeypatch.setattr(di, "install_specs_to_target", raise_wheel_error)
+    monkeypatch.setattr(di, "_find_system_python", lambda: ["py", "-3.12"])
+
+    def raise_subprocess_error(base, specs, target, log):
+        raise RuntimeError("sub fail")
+
+    monkeypatch.setattr(di, "_run_pip_subprocess", raise_subprocess_error)
+
+    with pytest.raises(RuntimeError) as excinfo:
+        di.install_specs(["some-pkg>=1.0"])
+    msg = str(excinfo.value)
+    assert "手动安装" in msg
+    assert "pip install" in msg
+    assert "some-pkg>=1.0" in msg
 
 
 def test_target_args_force_wheels_and_target(tmp_path):

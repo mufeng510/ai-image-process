@@ -5,32 +5,30 @@ leaving the app (settings dialog buttons map 1:1 to these features):
 
 - "provenance"   清理 AI Metadata  -> remove-ai-watermarks>=0.26.0
 - "visible"      去除可见水印      -> remove-ai-watermarks[visible]>=0.26.0
-- "onnxruntime"  migan/lama 填充后端支持 -> onnxruntime>=1.16
+- "onnxruntime"  migan/lama 填充后端支持 -> remove-ai-watermarks[migan]>=0.26.0
 
 Install strategy:
 
 - Development checkout (non-frozen): run ``python -m pip install <spec>``
   with the running interpreter so the package lands in the active venv.
-- Frozen app (PyInstaller): the bundle ships pip; run it in-process with
-  ``--only-binary`` and ``--target`` pointing at a writable per-user
-  directory that is prepended to sys.path (see ensure_runtime_site).
-  If pip is unavailable in the bundle, fall back to a system interpreter
-  whose major.minor version matches the frozen runtime — binary wheels
-  (cv2/onnxruntime) only load in a matching interpreter, so an exact
-  match is required.
+- Frozen app (PyInstaller): use a pip-free wheel installer that downloads
+  and extracts binary wheels directly into a writable per-user directory
+  prepended to sys.path (see ensure_runtime_site). If the wheel installer
+  fails, fall back to a system interpreter whose major.minor version matches
+  the frozen runtime — binary wheels (cv2/onnxruntime) only load in a
+  matching interpreter, so an exact match is required.
 """
 from __future__ import annotations
 
-import io
 import os
 import subprocess
 import sys
-import tempfile
 from collections.abc import Callable
 from pathlib import Path
 
 from app.config.paths import is_frozen, user_data_dir
 from app.platform import CREATE_NO_WINDOW
+from app.core.wheel_installer import install_specs_to_target, WheelInstallError
 
 # Installable features -> pip requirement specs. The dialog exposes one
 # install button per feature (the two that matter: provenance + visible).
@@ -50,14 +48,8 @@ FEATURE_LABELS: dict[str, str] = {
 
 SITE_DIR_NAME = "python-packages"
 
-PIP_LOG_NAME = "ai-image-process-pip.log"
 # 失败时展示的 pip 输出长度上限（字符），避免弹窗过长。
 ERROR_TAIL_CHARS = 2000
-
-
-def pip_log_path() -> Path:
-    """pip 详细日志文件路径（in-process 安装写入此文件）。"""
-    return Path(tempfile.gettempdir()) / PIP_LOG_NAME
 
 
 def manual_install_command(specs: list[str]) -> str:
@@ -185,51 +177,6 @@ def _emit(log: Callable[[str], None] | None, line: str) -> None:
         log(line.rstrip())
 
 
-def _run_pip_inprocess(specs: list[str], target: Path, log: Callable[[str], None] | None) -> None:
-    """Run pip from inside the frozen bundle with --target.
-
-    pip is bundled into the app (see build/ai-image-process.spec). Console
-    streams may be None in windowed builds, so they are redirected to a
-    buffer for the duration and pip's own --log file is kept as a fallback
-    source for error details.
-    """
-    logfile = pip_log_path()
-    args = [
-        *_pip_common_args(),
-        *_target_args(target),
-        "--log",
-        str(logfile),
-        *specs,
-    ]
-    buf = io.StringIO()
-    old_out, old_err = sys.stdout, sys.stderr
-    sys.stdout = buf
-    sys.stderr = buf
-    try:
-        # Import inside the redirect: pip's logging handlers capture the
-        # streams at import time, and windowed frozen apps may have none.
-        from pip._internal.cli.main import main as pip_main
-
-        rc = pip_main(args)
-    finally:
-        sys.stdout, sys.stderr = old_out, old_err
-
-    if rc == 0:
-        _emit(log, "pip 安装完成")
-        return
-
-    detail = ""
-    try:
-        detail = logfile.read_text(encoding="utf-8", errors="replace")[-ERROR_TAIL_CHARS:]
-    except OSError:
-        detail = buf.getvalue()[-ERROR_TAIL_CHARS:]
-    raise RuntimeError(
-        f"pip 退出码 {rc}，安装失败。详情：\n{detail or '（无输出）'}"
-        f"\n\n完整日志：{logfile}"
-        f"\n手动安装：{manual_install_command(specs)}"
-    )
-
-
 def _run_pip_subprocess(
     base: list[str], specs: list[str], target: Path | None, log: Callable[[str], None] | None
 ) -> None:
@@ -285,19 +232,21 @@ def install_specs(specs: list[str], log: Callable[[str], None] | None = None, po
 
     target = ensure_runtime_site(portable_mode)
     try:
-        import pip  # noqa: F401
-    except Exception:  # noqa: BLE001
+        install_specs_to_target(specs, target, log=log)
+        return
+    except WheelInstallError as exc:
         base = _find_system_python()
         if base is None:
             raise RuntimeError(
-                "软件内置安装器不可用，且未在系统中找到与运行时匹配的 Python "
-                f"{_frozen_version()}（需含 pip）。请安装匹配版本的 Python 后重试，"
-                "或手动执行：" + manual_install_command(specs)
-            ) from None
-        _run_pip_subprocess(base, specs, target, log)
-        return
-
-    _run_pip_inprocess(specs, target, log)
+                f"{exc}\n\n手动安装：{manual_install_command(specs)}"
+            ) from exc
+        _emit(log, "内置安装失败，回退到系统 Python …")
+        try:
+            _run_pip_subprocess(base, specs, target, log)
+        except RuntimeError as sub_exc:
+            raise RuntimeError(
+                f"{sub_exc}\n手动安装：{manual_install_command(specs)}"
+            ) from exc
 
 
 def install_feature(feature: str, log: Callable[[str], None] | None = None, portable_mode: bool = False) -> None:
