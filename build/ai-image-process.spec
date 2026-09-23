@@ -59,18 +59,8 @@ for pkg in ("PySide6", "shiboken6"):
     except Exception:
         pass
 
-# Bundle pip so the app can install optional dependencies (e.g.
-# remove-ai-watermarks) at runtime into a user-writable directory.
-try:
-    d, b, h = collect_all("pip")
-    datas += d
-    binaries += b
-    hiddenimports += h
-except Exception:
-    pass
-
-# TLS support and sysconfig are required by pip's network installs but
-# may not be pulled in by the app's own imports.
+# ssl is required for urllib HTTPS (PyPI wheel downloads); sysconfig keeps
+# packaging.tags happy. The wheel installer needs no bundled pip.
 hiddenimports += ["ssl", "sysconfig"]
 
 a = Analysis(
