@@ -2,34 +2,28 @@
   "version": 1,
   "devices": [
     {
-      "id": "apple-iphone-15",
+      "id": "apple-iphone-17-pro-max",
       "make": "Apple",
-      "model": "iPhone 15",
-      "lens": "iPhone 15 back triple camera 24mm f/1.78"
+      "model": "iPhone 17 Pro Max",
+      "lens": "iPhone 17 Pro Max Main Camera"
     },
     {
-      "id": "apple-iphone-15-pro",
+      "id": "apple-iphone-17-pro",
       "make": "Apple",
-      "model": "iPhone 15 Pro",
-      "lens": "iPhone 15 Pro back triple camera 24mm f/1.78"
+      "model": "iPhone 17 Pro",
+      "lens": "iPhone 17 Pro Main Camera"
     },
     {
-      "id": "apple-iphone-16",
+      "id": "apple-iphone-air",
       "make": "Apple",
-      "model": "iPhone 16",
-      "lens": "iPhone 16 Main Camera"
+      "model": "iPhone Air",
+      "lens": "iPhone Air Main Camera"
     },
     {
-      "id": "apple-iphone-16-plus",
+      "id": "apple-iphone-17",
       "make": "Apple",
-      "model": "iPhone 16 Plus",
-      "lens": "iPhone 16 Plus Main Camera"
-    },
-    {
-      "id": "apple-iphone-16-pro",
-      "make": "Apple",
-      "model": "iPhone 16 Pro",
-      "lens": "iPhone 16 Pro Main Camera"
+      "model": "iPhone 17",
+      "lens": "iPhone 17 Main Camera"
     },
     {
       "id": "apple-iphone-16-pro-max",
@@ -38,136 +32,142 @@
       "lens": "iPhone 16 Pro Max Main Camera"
     },
     {
-      "id": "apple-iphone-17-pro-max",
+      "id": "apple-iphone-16-pro",
       "make": "Apple",
-      "model": "iPhone 17 Pro Max",
-      "lens": "iPhone 17 Pro Max Main Camera"
+      "model": "iPhone 16 Pro",
+      "lens": "iPhone 16 Pro Main Camera"
     },
     {
-      "id": "samsung-galaxy-s24-ultra",
-      "make": "Samsung",
-      "model": "Galaxy S24 Ultra",
-      "lens": "Samsung Galaxy S24 Ultra Main Camera"
+      "id": "apple-iphone-16-plus",
+      "make": "Apple",
+      "model": "iPhone 16 Plus",
+      "lens": "iPhone 16 Plus Main Camera"
     },
     {
-      "id": "huawei-pura-70-ultra",
-      "make": "Huawei",
-      "model": "Pura 70 Ultra",
-      "lens": "Huawei Pura 70 Ultra Main Camera"
+      "id": "apple-iphone-16",
+      "make": "Apple",
+      "model": "iPhone 16",
+      "lens": "iPhone 16 Main Camera"
     },
     {
-      "id": "huawei-mate-70-pro",
-      "make": "Huawei",
-      "model": "Mate 70 Pro",
-      "lens": "Huawei Mate 70 Pro Main Camera"
+      "id": "apple-iphone-16e",
+      "make": "Apple",
+      "model": "iPhone 16e",
+      "lens": "iPhone 16e Main Camera"
     },
     {
-      "id": "huawei-mate-x6",
-      "make": "Huawei",
-      "model": "Mate X6",
-      "lens": "Huawei Mate X6 Main Camera"
+      "id": "apple-iphone-15-pro-max",
+      "make": "Apple",
+      "model": "iPhone 15 Pro Max",
+      "lens": "iPhone 15 Pro Max back triple camera 24mm f/1.78"
     },
     {
-      "id": "xiaomi-xiaomi-15-ultra",
-      "make": "Xiaomi",
-      "model": "Xiaomi 15 Ultra",
-      "lens": "Xiaomi 15 Ultra Main Camera"
+      "id": "apple-iphone-15-pro",
+      "make": "Apple",
+      "model": "iPhone 15 Pro",
+      "lens": "iPhone 15 Pro back triple camera 24mm f/1.78"
     },
     {
-      "id": "xiaomi-xiaomi-15",
-      "make": "Xiaomi",
-      "model": "Xiaomi 15",
-      "lens": "Xiaomi 15 Main Camera"
+      "id": "apple-iphone-15-plus",
+      "make": "Apple",
+      "model": "iPhone 15 Plus",
+      "lens": "iPhone 15 Plus back dual camera 26mm f/1.6"
     },
     {
-      "id": "redmi-redmi-k80-pro",
-      "make": "Redmi",
-      "model": "Redmi K80 Pro",
-      "lens": "Redmi K80 Pro Main Camera"
+      "id": "apple-iphone-15",
+      "make": "Apple",
+      "model": "iPhone 15",
+      "lens": "iPhone 15 back triple camera 24mm f/1.78"
     },
     {
-      "id": "redmi-redmi-turbo-4-pro",
-      "make": "Redmi",
-      "model": "Redmi Turbo 4 Pro",
-      "lens": "Redmi Turbo 4 Pro Main Camera"
+      "id": "apple-iphone-14-pro-max",
+      "make": "Apple",
+      "model": "iPhone 14 Pro Max",
+      "lens": "iPhone 14 Pro Max back triple camera 24mm f/1.78"
     },
     {
-      "id": "honor-magic7-pro",
-      "make": "Honor",
-      "model": "Magic7 Pro",
-      "lens": "Honor Magic7 Pro Main Camera"
+      "id": "apple-iphone-14-pro",
+      "make": "Apple",
+      "model": "iPhone 14 Pro",
+      "lens": "iPhone 14 Pro back triple camera 24mm f/1.78"
     },
     {
-      "id": "honor-magic-v3",
-      "make": "Honor",
-      "model": "Magic V3",
-      "lens": "Honor Magic V3 Main Camera"
+      "id": "apple-iphone-14-plus",
+      "make": "Apple",
+      "model": "iPhone 14 Plus",
+      "lens": "iPhone 14 Plus back dual camera 26mm f/1.5"
     },
     {
-      "id": "oppo-find-x8-pro",
-      "make": "OPPO",
-      "model": "Find X8 Pro",
-      "lens": "OPPO Find X8 Pro Main Camera"
+      "id": "apple-iphone-14",
+      "make": "Apple",
+      "model": "iPhone 14",
+      "lens": "iPhone 14 back dual camera 26mm f/1.5"
     },
     {
-      "id": "oppo-find-n5",
-      "make": "OPPO",
-      "model": "Find N5",
-      "lens": "OPPO Find N5 Main Camera"
+      "id": "apple-iphone-13-pro-max",
+      "make": "Apple",
+      "model": "iPhone 13 Pro Max",
+      "lens": "iPhone 13 Pro Max back triple camera 26mm f/1.5"
     },
     {
-      "id": "oppo-reno13-pro",
-      "make": "OPPO",
-      "model": "Reno13 Pro",
-      "lens": "OPPO Reno13 Pro Main Camera"
+      "id": "apple-iphone-13-pro",
+      "make": "Apple",
+      "model": "iPhone 13 Pro",
+      "lens": "iPhone 13 Pro back triple camera 26mm f/1.5"
     },
     {
-      "id": "vivo-x200-pro",
-      "make": "vivo",
-      "model": "X200 Pro",
-      "lens": "vivo X200 Pro Main Camera"
+      "id": "apple-iphone-13",
+      "make": "Apple",
+      "model": "iPhone 13",
+      "lens": "iPhone 13 back dual camera 26mm f/1.6"
     },
     {
-      "id": "vivo-x200-ultra",
-      "make": "vivo",
-      "model": "X200 Ultra",
-      "lens": "vivo X200 Ultra Main Camera"
+      "id": "apple-iphone-13-mini",
+      "make": "Apple",
+      "model": "iPhone 13 mini",
+      "lens": "iPhone 13 mini back dual camera 26mm f/1.6"
     },
     {
-      "id": "vivo-s20-pro",
-      "make": "vivo",
-      "model": "S20 Pro",
-      "lens": "vivo S20 Pro Main Camera"
+      "id": "apple-iphone-12-pro-max",
+      "make": "Apple",
+      "model": "iPhone 12 Pro Max",
+      "lens": "iPhone 12 Pro Max back triple camera 26mm f/1.6"
     },
     {
-      "id": "oneplus-oneplus-13",
-      "make": "OnePlus",
-      "model": "OnePlus 13",
-      "lens": "OnePlus 13 Main Camera"
+      "id": "apple-iphone-12-pro",
+      "make": "Apple",
+      "model": "iPhone 12 Pro",
+      "lens": "iPhone 12 Pro back triple camera 26mm f/1.6"
     },
     {
-      "id": "oneplus-oneplus-ace-5-pro",
-      "make": "OnePlus",
-      "model": "OnePlus Ace 5 Pro",
-      "lens": "OnePlus Ace 5 Pro Main Camera"
+      "id": "apple-iphone-12",
+      "make": "Apple",
+      "model": "iPhone 12",
+      "lens": "iPhone 12 back dual camera 26mm f/1.6"
     },
     {
-      "id": "realme-gt-7-pro",
-      "make": "realme",
-      "model": "GT 7 Pro",
-      "lens": "realme GT 7 Pro Main Camera"
+      "id": "apple-iphone-12-mini",
+      "make": "Apple",
+      "model": "iPhone 12 mini",
+      "lens": "iPhone 12 mini back dual camera 26mm f/1.6"
     },
     {
-      "id": "nubia-z70-ultra",
-      "make": "nubia",
-      "model": "Z70 Ultra",
-      "lens": "nubia Z70 Ultra Main Camera"
+      "id": "apple-iphone-se-3",
+      "make": "Apple",
+      "model": "iPhone SE (3rd generation)",
+      "lens": "iPhone SE (3rd generation) back camera 28mm f/1.8"
     },
     {
-      "id": "meizu-meizu-21-pro",
-      "make": "Meizu",
-      "model": "Meizu 21 Pro",
-      "lens": "Meizu 21 Pro Main Camera"
+      "id": "apple-iphone-11-pro",
+      "make": "Apple",
+      "model": "iPhone 11 Pro",
+      "lens": "iPhone 11 Pro back triple camera 26mm f/1.8"
+    },
+    {
+      "id": "apple-iphone-11",
+      "make": "Apple",
+      "model": "iPhone 11",
+      "lens": "iPhone 11 back dual camera 26mm f/1.8"
     }
   ]
 }
