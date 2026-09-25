@@ -6,7 +6,18 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 
-CONFIG_VERSION = 1
+CONFIG_VERSION = 2
+
+DEFAULT_AI_VIDEO_PROMPT = (
+    "Create a subtle, realistic Live Photo motion from the provided image. "
+    "Preserve the subject's identity, shape, proportions, color, material, texture, "
+    "composition, perspective, and overall visual appearance exactly. "
+    "Motion should be minimal and natural, similar to a real handheld camera moment. "
+    "Do not introduce new objects. Do not remove existing objects. Do not redesign the subject. "
+    "Do not change the product shape, color, material, texture, or proportions. "
+    "Avoid dramatic camera movement, strong lighting changes, artificial transitions, or cinematic effects. "
+    "The first/anchor frame should remain visually consistent with the provided image."
+)
 
 
 @dataclass
@@ -65,6 +76,48 @@ class SimpleStepConfig:
 
 
 @dataclass
+class RotateCropStepConfig:
+    enabled: bool = False
+    min_angle: float = -2.0
+    max_angle: float = 2.0
+
+
+@dataclass
+class HiddenImageStepConfig:
+    enabled: bool = False
+    library_dir: str = ""
+    opacity: float = 0.02  # 0..0.5 fraction (default 2%)
+
+
+@dataclass
+class LocalMotionConfig:
+    duration_seconds: float = 3.0
+    fps: int = 30
+    motion_strength: float = 0.06  # relative zoom/pan amplitude, subtle
+
+
+@dataclass
+class AIVideoConfig:
+    provider: str = ""
+    model: str = ""
+    endpoint: str = ""
+    api_key: str = ""
+    prompt: str = DEFAULT_AI_VIDEO_PROMPT
+    extra_prompt: str = ""
+    duration_seconds: float = 3.0
+    timeout_seconds: int = 300
+    retry_count: int = 2
+
+
+@dataclass
+class LivePhotoStepConfig:
+    enabled: bool = False
+    video_source: str = "local_motion"  # local_motion|ai_video
+    local_motion: LocalMotionConfig = field(default_factory=LocalMotionConfig)
+    ai_video: AIVideoConfig = field(default_factory=AIVideoConfig)
+
+
+@dataclass
 class DeduplicateStepConfig:
     enabled: bool = True
     algorithm: str = "md5"  # md5, sha1, sha256
@@ -78,6 +131,9 @@ class StepsConfig:
     reencode: ReencodeStepConfig = field(default_factory=ReencodeStepConfig)
     device_metadata: DeviceMetadataStepConfig = field(default_factory=DeviceMetadataStepConfig)
     rename: SimpleStepConfig = field(default_factory=SimpleStepConfig)
+    rotate_crop: RotateCropStepConfig = field(default_factory=RotateCropStepConfig)
+    hidden_image: HiddenImageStepConfig = field(default_factory=HiddenImageStepConfig)
+    live_photo: LivePhotoStepConfig = field(default_factory=LivePhotoStepConfig)
     output_write: SimpleStepConfig = field(default_factory=SimpleStepConfig)
 
 
@@ -129,6 +185,9 @@ class AppConfig:
             reencode=ReencodeStepConfig(**_filter(steps_raw.get("reencode", {}), ReencodeStepConfig)),
             device_metadata=DeviceMetadataStepConfig(**_filter(steps_raw.get("device_metadata", {}), DeviceMetadataStepConfig)),
             rename=SimpleStepConfig(**_filter(steps_raw.get("rename", {}), SimpleStepConfig)),
+            rotate_crop=RotateCropStepConfig(**_filter(steps_raw.get("rotate_crop", {}), RotateCropStepConfig)),
+            hidden_image=HiddenImageStepConfig(**_filter(steps_raw.get("hidden_image", {}), HiddenImageStepConfig)),
+            live_photo=_parse_live_photo(steps_raw.get("live_photo", {})),
             output_write=SimpleStepConfig(**_filter(steps_raw.get("output_write", {}), SimpleStepConfig)),
         )
         input_cfg = InputConfig(**_filter(data.get("input", {}), InputConfig))
@@ -146,6 +205,23 @@ class AppConfig:
         )
 
 
+def _parse_live_photo(raw: dict[str, Any]) -> LivePhotoStepConfig:
+    raw = dict(raw or {})
+    local_raw = raw.get("local_motion", {}) or {}
+    ai_raw = raw.get("ai_video", {}) or {}
+    local = LocalMotionConfig(**{k: v for k, v in local_raw.items() if k in LocalMotionConfig.__dataclass_fields__})
+    ai = AIVideoConfig(**{k: v for k, v in ai_raw.items() if k in AIVideoConfig.__dataclass_fields__})
+    base = {k: v for k, v in raw.items() if k in ("enabled", "video_source")}
+    cfg = LivePhotoStepConfig(**base) if base else LivePhotoStepConfig()
+    if "enabled" in raw:
+        cfg.enabled = bool(raw["enabled"])
+    if "video_source" in raw:
+        cfg.video_source = str(raw["video_source"] or "local_motion")
+    cfg.local_motion = local
+    cfg.ai_video = ai
+    return cfg
+
+
 def _filter(raw: dict[str, Any], cls: type) -> dict[str, Any]:
     return {k: v for k, v in (raw or {}).items() if k in cls.__dataclass_fields__}
 
@@ -158,6 +234,35 @@ def migrate_config(data: dict[str, Any]) -> dict[str, Any]:
     version = int(data.get("config_version", 1))
     if version < 1:
         data["config_version"] = 1
-    # future migrations go here
+    steps = data.setdefault("steps", {})
+    # v2: new steps default OFF so upgrades never change existing behavior.
+    if version < 2:
+        steps.setdefault("rotate_crop", {"enabled": False, "min_angle": -2.0, "max_angle": 2.0})
+        steps.setdefault("hidden_image", {"enabled": False, "library_dir": "", "opacity": 0.02})
+        steps.setdefault(
+            "live_photo",
+            {
+                "enabled": False,
+                "video_source": "local_motion",
+                "local_motion": {"duration_seconds": 3.0, "fps": 30, "motion_strength": 0.06},
+                "ai_video": {
+                    "provider": "",
+                    "model": "",
+                    "endpoint": "",
+                    "api_key": "",
+                    "prompt": DEFAULT_AI_VIDEO_PROMPT,
+                    "extra_prompt": "",
+                    "duration_seconds": 3.0,
+                    "timeout_seconds": 300,
+                    "retry_count": 2,
+                },
+            },
+        )
+        # ensure ai prompt default exists even if live_photo block existed partially
+        lp = steps.get("live_photo", {})
+        if isinstance(lp, dict):
+            ai = lp.setdefault("ai_video", {})
+            if isinstance(ai, dict) and not ai.get("prompt"):
+                ai["prompt"] = DEFAULT_AI_VIDEO_PROMPT
     data["config_version"] = max(version, CONFIG_VERSION)
     return data

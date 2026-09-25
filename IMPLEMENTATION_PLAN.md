@@ -1,8 +1,8 @@
 # IMPLEMENTATION_PLAN.md
 ## AI Image Process Desktop Client (revised after Architect REQUEST_CHANGES)
 
-Status: ralplan planner revision 2
-Date: 2026-08-10
+Status: implemented through v0.2.0 feature wave (preflight + hidden image + rotate/crop + live photo + iphone import)
+Date: 2026-08-10 (plan) / 2026-09-25 (v0.2.0 implementation note)
 Sources: interview-complete spec; architect substitute review; process.ps1
 
 ## 0. Summary
@@ -10,6 +10,33 @@ Port DoubaoProcessor PowerShell workflow to Python + PySide6.
 Preserve metadata cleanup, device EXIF, JPEG re-encode, batch output.
 Windows-first v1.0; cross-platform core + CI stubs now.
 Hard gate: user confirms this plan before product code.
+
+## 0.1 v0.2.0 implementation note (this wave)
+
+Pipeline order now (each step independently enabled; new steps default OFF):
+
+```text
+1. deduplicate → 2. rename → 3. provenance_cleanup → 4. visible_watermark
+→ 5. reencode → 6. device_metadata → 7. rotate_crop → 8. hidden_image
+→ 9. live_photo → 10. output_write
+```
+
+Key design conclusions from the repo audit:
+
+- `rename` was pure-compute (`output_name`) running after `device_metadata`; it now
+  runs right after `deduplicate`, with basenames fixed once in Preflight and shared
+  by JPG+MOV bundles (`output_stem`). Date-template edge: `capture_dt` is not yet
+  known at rename time, so date variables fall back to job-start time (documented).
+- `device_metadata` writes EXIF via bundled ExifTool onto the current JPEG; pixel
+  steps after it (`rotate_crop`, `hidden_image`) re-apply final tags + sRGB ICC via
+  `app/core/finalize.py` so Pillow saves never drop metadata.
+- `output_write` remains the only writer to the user dir; Live Photo bundles commit
+  atomically (temp names + rename; rename/skip/overwrite applied to the pair as one).
+- Config is now v2 with migration; `app/version.py` is the version source of truth
+  (0.2.0, `pyproject.toml` aligned; README no longer caches a divergent version).
+- iPhone import is a standalone tool (`app/core/iphone_import/`), honestly flagged
+  `requires_user_sync=True`; Stage-2 device validation is still pending
+  (see `docs/live-photo-testing.md`).
 
 ## 1. RALPLAN-DR
 Principles: preserve capability as steps; core not depend on GUI; no end-user toolchain; xplat core with Windows release-block; safe temp/originals.
@@ -80,7 +107,25 @@ purity notes; failure mode per file vs abort
 ### Step registry
 register built-in steps; GUI lists from registry; future steps without GUI rewrite
 
-### Default step order and I/O
+### Default step order and I/O (v0.2.0 canonical — supersedes the v1 order below)
+
+```text
+1. deduplicate → 2. rename → 3. provenance_cleanup → 4. visible_watermark
+→ 5. reencode → 6. device_metadata → 7. rotate_crop → 8. hidden_image
+→ 9. live_photo → 10. output_write
+```
+
+- Preflight gate runs before any per-file work (dedup count → basenames →
+  hidden count/safety/assignment → Live Photo resources); failure = no
+  outputs, no deletions, structured error.
+- `rename` is pure-compute; preflight fixes basenames once (shared JPG+MOV
+  stem). Date-template variables fall back to job-start time since rename now
+  precedes `device_metadata`.
+- `output_write` is the only writer to the user dir; Live Photo JPG+MOV commit
+  as one atomic bundle. `output_write` OFF (or skipped) commits nothing, and
+  hidden images are then retained, never deleted.
+
+### Original v1 order (historical; kept for reference — see §0.1 for deltas)
 1. input_normalize: inputs -> FileRecords; filter images; recursion policy default non-recursive folders unless enabled
 2. provenance_cleanup: current file -> cleaned work file (metadata mode)
 3. reencode: work file -> jpeg work file + quality + icc flag
@@ -89,8 +134,16 @@ register built-in steps; GUI lists from registry; future steps without GUI rewri
 6. output_write: only step that writes into user output dir; applies conflict policy
 7. cleanup_temp: delete only under verified temp_root/job_id prefix
 
-## 6. Config schema v1 (canonical)
-config_version: 1
+## 6. Config schema v2 (canonical; v1 historical below)
+config_version: 2 (v1 configs auto-migrate; new steps default OFF)
+ui_language: zh-CN
+output: directory, use_source_directory, auto_create_directory, conflict_policy (rename|skip|overwrite), preserve_originals true, allow_overwrite_originals false
+naming: preset, template, number_start, number_width
+steps:
+  deduplicate, provenance_cleanup, visible_watermark, reencode, device_metadata, rename, output_write (as v1)
+  rotate_crop: enabled false, min_angle -2.0, max_angle 2.0
+  hidden_image: enabled false, library_dir "", opacity 0.02
+  live_photo: enabled false, video_source local_motion|ai_video, local_motion {duration 3s, fps 30, strength 0.06}, ai_video {provider/model/endpoint/api_key/prompt/extra/duration/timeout/retry}
 ui_language: zh-CN
 output: directory, use_source_directory, auto_create_directory, conflict_policy (rename|skip|overwrite), preserve_originals true, allow_overwrite_originals false
 naming: preset, template, number_start, number_width

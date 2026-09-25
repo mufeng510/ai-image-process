@@ -71,6 +71,19 @@ git push origin v0.1.0
 - Prefer onedir over onefile for ExifTool/Qt reliability.
 - Do not rely on user PATH for ExifTool/ImageMagick.
 - Non-Windows ExifTool bundling is best-effort and must not fail packaging.
-- `remove-ai-watermarks` is optional and not bundled; pip **is** bundled so
-  end users can install it from within the app (Settings → Processing).
+- `remove-ai-watermarks` is optional and not bundled; end users install it from
+  within the app (Settings → Processing) via the built-in **pure-Python wheel
+  installer** (no system pip / no bundled pip required in frozen builds).
 - No Apple codesign/notarization in this pipeline.
+
+## FFmpeg（Live Photo 本地动态所需）
+
+- 运行时解析顺序：`Tools/ffmpeg/`（随包）→ 用户 PATH；找不到时仅 Live Photo
+  在 Preflight 报错，普通图片处理不受影响。
+- 打包前请自行将已确认许可证的构建放入 `Tools/ffmpeg/`（`ffmpeg` + `ffprobe`）：
+  - 检查构建版本许可证（GPL/LGPL 区分）、H.264 encoder（x264/openh264）组件许可，
+    确认与本项目 MIT 发行方式兼容后再发布；
+  - 记录来源/版本/许可证到发布说明，保证 release 构建可重复或版本锁定；
+  - 不要提交无法确定许可的第三方二进制进仓库。
+- AI 视频模式不需要 FFmpeg 额外编解码器之外的依赖；下载的 AI 视频统一经
+  `MovieNormalizer` 转为 MOV/H.264/yuv420p/无音频标准形态。

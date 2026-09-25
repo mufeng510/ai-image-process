@@ -20,9 +20,10 @@ def main(argv: list[str] | None = None) -> int:
         from app.main_cli import main as cli_main
         return cli_main(args[1:])
     # Heuristic: if looks like processing args, use CLI; else GUI
-    if args and (args[0] in {"-h", "--help", "--version"} or "-o" in args or "--output" in args or not args[0].startswith("-")):
+    cli_flags = {"-h", "--help", "--version", "--list-steps"}
+    if args and (args[0] in cli_flags or "-o" in args or "--output" in args or "--list-steps" in args or not args[0].startswith("-")):
         # bare path or explicit CLI flags
-        if args[0] in {"-h", "--help", "--version"} or "-o" in args or "--output" in args or PathLike(args[0]):
+        if args[0] in cli_flags or "-o" in args or "--output" in args or "--list-steps" in args or PathLike(args[0]):
             from app.main_cli import main as cli_main
             return cli_main(args)
     from app.gui.app import run_gui

@@ -99,26 +99,47 @@ class MainWindow(QMainWindow):
         out_layout.addWidget(self.chk_preserve)
         root.addWidget(out_box)
 
-        steps_box = QGroupBox("处理步骤")
+        steps_box = QGroupBox("处理步骤（顺序见 Registry）")
         steps_layout = QVBoxLayout(steps_box)
         self.chk_provenance = QCheckBox("清理 AI Metadata / 溯源信息")
         self.chk_visible = QCheckBox("去除可见水印（AI 标记）")
         self.chk_reencode = QCheckBox("图片重编码（JPEG + sRGB）")
         self.chk_device = QCheckBox("写入设备 Metadata")
         self.chk_rename = QCheckBox("文件命名")
-        self.chk_output = QCheckBox("输出处理后的图片")
+        self.chk_rotate = QCheckBox("图片旋转与裁剪")
+        self.chk_hidden = QCheckBox("隐藏图片")
+        self.chk_live = QCheckBox("生成 Apple Live Photo")
+        self.chk_output = QCheckBox("输出处理结果")
         for w in (
             self.chk_provenance,
             self.chk_visible,
             self.chk_reencode,
             self.chk_device,
             self.chk_rename,
+            self.chk_rotate,
+            self.chk_hidden,
+            self.chk_live,
             self.chk_output,
         ):
             w.setChecked(True)
             steps_layout.addWidget(w)
-        # 可见水印去除需可选依赖，默认关闭
+        # 可见水印去除需可选依赖，默认关闭；新功能默认关闭
         self.chk_visible.setChecked(False)
+        self.chk_rotate.setChecked(False)
+        self.chk_hidden.setChecked(False)
+        self.chk_live.setChecked(False)
+        # 隐藏图片库快捷行
+        hidden_row = QHBoxLayout()
+        self.hidden_edit = QLineEdit()
+        self.hidden_edit.setPlaceholderText("隐藏图片库目录…")
+        self.btn_hidden = QPushButton("浏览")
+        self.btn_hidden.clicked.connect(self._choose_hidden)
+        hidden_row.addWidget(self.hidden_edit, 1)
+        hidden_row.addWidget(self.btn_hidden)
+        steps_layout.addLayout(hidden_row)
+        self.lbl_hidden_count = QLabel("可用图片：-")
+        steps_layout.addWidget(self.lbl_hidden_count)
+        self.hidden_edit.textChanged.connect(lambda _t: self._refresh_hidden_count())
         root.addWidget(steps_box)
 
         action = QHBoxLayout()
@@ -173,6 +194,11 @@ class MainWindow(QMainWindow):
         self.chk_reencode.setChecked(self._config.steps.reencode.enabled)
         self.chk_device.setChecked(self._config.steps.device_metadata.enabled)
         self.chk_rename.setChecked(self._config.steps.rename.enabled)
+        self.chk_rotate.setChecked(self._config.steps.rotate_crop.enabled)
+        self.chk_hidden.setChecked(self._config.steps.hidden_image.enabled)
+        self.chk_live.setChecked(self._config.steps.live_photo.enabled)
+        self.hidden_edit.setText(self._config.steps.hidden_image.library_dir or "")
+        self._refresh_hidden_count()
         self.chk_output.setChecked(self._config.steps.output_write.enabled)
 
     def _ui_to_config(self) -> AppConfig:
@@ -185,6 +211,10 @@ class MainWindow(QMainWindow):
         cfg.steps.reencode.enabled = self.chk_reencode.isChecked()
         cfg.steps.device_metadata.enabled = self.chk_device.isChecked()
         cfg.steps.rename.enabled = self.chk_rename.isChecked()
+        cfg.steps.rotate_crop.enabled = self.chk_rotate.isChecked()
+        cfg.steps.hidden_image.enabled = self.chk_hidden.isChecked()
+        cfg.steps.hidden_image.library_dir = self.hidden_edit.text().strip()
+        cfg.steps.live_photo.enabled = self.chk_live.isChecked()
         cfg.steps.output_write.enabled = self.chk_output.isChecked()
         return cfg
 
@@ -224,6 +254,27 @@ class MainWindow(QMainWindow):
         self._inputs.clear()
         self.drop_zone.set_summary(0)
         self._append_log("已清空输入")
+
+    @Slot()
+    def _choose_hidden(self) -> None:
+        folder = QFileDialog.getExistingDirectory(self, "选择隐藏图片库")
+        if folder:
+            self.hidden_edit.setText(folder)
+            self._refresh_hidden_count()
+
+    def _refresh_hidden_count(self) -> None:
+        from app.core.hidden_images import scan_hidden_library
+
+        lib = self.hidden_edit.text().strip()
+        if not lib:
+            self.lbl_hidden_count.setText("可用图片：-")
+            return
+        try:
+            exts = set(self._config.input.extensions or ["jpg", "jpeg", "png", "webp"])
+            pool = scan_hidden_library(Path(lib), {e.lower().lstrip(".") for e in exts})
+            self.lbl_hidden_count.setText(f"可用图片：{len(pool)} 张（仅 UI 展示，开始时重新预检）")
+        except Exception:  # noqa: BLE001
+            self.lbl_hidden_count.setText("可用图片：读取失败")
 
     @Slot()
     def _choose_output(self) -> None:
@@ -286,6 +337,12 @@ class MainWindow(QMainWindow):
     @Slot(object)
     def _on_finished(self, result: object) -> None:
         if not isinstance(result, JobResult):
+            return
+        if getattr(result, "preflight_failed", False):
+            text = f"预检未通过，任务未开始。\n\n{result.preflight_error or ''}"
+            self.lbl_status.setText("预检未通过")
+            self._append_log(text)
+            QMessageBox.warning(self, "预检未通过", text)
             return
         if result.cancelled:
             text = f"已取消。成功 {result.success_count}，失败 {result.failure_count}"

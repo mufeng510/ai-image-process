@@ -28,6 +28,12 @@ exif_dir = repo / "Tools" / "exiftool"
 if exif_dir.exists():
     datas.append((str(exif_dir), "Tools/exiftool"))
 
+# Optional FFmpeg for Live Photo local motion (see build/README.md for
+# licensing notes). Best-effort: packaging must not fail when absent.
+ffmpeg_dir = repo / "Tools" / "ffmpeg"
+if ffmpeg_dir.exists():
+    datas.append((str(ffmpeg_dir), "Tools/ffmpeg"))
+
 hiddenimports = [
     "app",
     "app.main",
@@ -42,6 +48,26 @@ hiddenimports = [
     "app.core",
     "app.core.pipeline",
     "app.core.steps",
+    "app.core.preflight",
+    "app.core.hidden_images",
+    "app.core.image_metadata",
+    "app.core.finalize",
+    "app.core.ffmpeg_resolver",
+    "app.core.live_photo",
+    "app.core.live_photo.builder",
+    "app.core.live_photo.validator",
+    "app.core.live_photo.metadata",
+    "app.core.live_photo.movie",
+    "app.core.live_photo.models",
+    "app.core.live_photo.providers",
+    "app.core.live_photo.providers.base",
+    "app.core.live_photo.providers.local_motion",
+    "app.core.live_photo.providers.ai_video",
+    "app.core.iphone_import",
+    "app.core.iphone_import.base",
+    "app.core.iphone_import.manual_sync",
+    "app.core.iphone_import.apple_devices",
+    "app.core.iphone_import.itunes",
     "app.core.dependency_installer",
     "app.config",
     "PIL",

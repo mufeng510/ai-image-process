@@ -18,6 +18,12 @@ class RenameStep(Step):
 
     def run(self, ctx: StepContext) -> StepResult:
         try:
+            # Preflight is the single source of truth for basenames (computed
+            # once after dedup, shared by JPG+MOV). Reuse it for determinism;
+            # compute only when preflight did not run (e.g. direct step use).
+            if ctx.record.output_stem:
+                ctx.record.output_name = f"{ctx.record.output_stem}.jpg"
+                return StepResult(self.id, True, message=ctx.record.output_name)
             when = ctx.record.capture_dt or datetime.now()
             number = ctx.config.naming.number_start + ctx.record.index - 1
             name = render_filename(
@@ -35,6 +41,7 @@ class RenameStep(Step):
                 from pathlib import Path as P
                 stem = P(name).stem
             ctx.record.output_name = f"{stem}.jpg"
+            ctx.record.output_stem = stem
             return StepResult(self.id, True, message=ctx.record.output_name)
         except Exception as exc:  # noqa: BLE001
             return StepResult(self.id, False, error=str(exc))

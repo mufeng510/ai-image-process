@@ -361,6 +361,83 @@ class SettingsDialog(QDialog):
         df.addRow("Software 标签", self.software)
         layout.addWidget(dev)
 
+        # Rotate/crop
+        rot = QGroupBox("图片旋转与裁剪")
+        rotf = QFormLayout(rot)
+        self.chk_rotate = QCheckBox("启用此步骤")
+        rotf.addRow(self.chk_rotate)
+        from PySide6.QtWidgets import QDoubleSpinBox
+
+        self.min_angle = QDoubleSpinBox()
+        self.min_angle.setRange(-45.0, 45.0)
+        self.min_angle.setSingleStep(0.5)
+        self.max_angle = QDoubleSpinBox()
+        self.max_angle.setRange(-45.0, 45.0)
+        self.max_angle.setSingleStep(0.5)
+        rotf.addRow("最小旋转角度", self.min_angle)
+        rotf.addRow("最大旋转角度", self.max_angle)
+        layout.addWidget(rot)
+
+        # Hidden images
+        hid = QGroupBox("隐藏图片")
+        hf = QFormLayout(hid)
+        self.chk_hidden = QCheckBox("启用此步骤")
+        hf.addRow(self.chk_hidden)
+        self.hidden_dir = QLineEdit()
+        hid_browse = QPushButton("浏览…")
+        hid_browse.clicked.connect(lambda: self._browse_into(self.hidden_dir))
+        hrow = QHBoxLayout()
+        hrow.addWidget(self.hidden_dir, 1)
+        hrow.addWidget(hid_browse)
+        hf.addRow("隐藏图片库", hrow)
+        self.hidden_opacity = QDoubleSpinBox()
+        self.hidden_opacity.setRange(0.001, 0.5)
+        self.hidden_opacity.setSingleStep(0.005)
+        self.hidden_opacity.setDecimals(3)
+        hf.addRow("不透明度（默认 0.02）", self.hidden_opacity)
+        hid_note = QLabel("成功使用后永久删除（不进回收站）；数量不足时任务禁止启动；路径与输入/输出重叠时拒绝启动。")
+        hid_note.setWordWrap(True)
+        hid_note.setStyleSheet("color:#666;font-size:11px;")
+        hf.addRow(hid_note)
+        layout.addWidget(hid)
+
+        # Live Photo
+        lp = QGroupBox("生成 Apple Live Photo")
+        lpf = QFormLayout(lp)
+        self.chk_live = QCheckBox("启用此步骤")
+        lpf.addRow(self.chk_live)
+        self.video_source = QComboBox()
+        self.video_source.addItem("本地动态生成", "local_motion")
+        self.video_source.addItem("AI 视频生成", "ai_video")
+        lpf.addRow("视频来源", self.video_source)
+        self.lp_duration = QDoubleSpinBox()
+        self.lp_duration.setRange(1.0, 10.0)
+        self.lp_duration.setSingleStep(0.5)
+        lpf.addRow("本地时长（秒）", self.lp_duration)
+        self.lp_strength = QDoubleSpinBox()
+        self.lp_strength.setRange(0.01, 0.25)
+        self.lp_strength.setSingleStep(0.01)
+        self.lp_strength.setDecimals(3)
+        lpf.addRow("动态强度", self.lp_strength)
+        self.ai_provider = QLineEdit()
+        self.ai_model = QLineEdit()
+        self.ai_endpoint = QLineEdit()
+        self.ai_key = QLineEdit()
+        self.ai_key.setEchoMode(QLineEdit.EchoMode.Password)
+        self.ai_prompt = QLineEdit()
+        self.ai_extra = QLineEdit()
+        lpf.addRow("AI Provider", self.ai_provider)
+        lpf.addRow("AI Model", self.ai_model)
+        lpf.addRow("AI Endpoint", self.ai_endpoint)
+        lpf.addRow("AI API Key", self.ai_key)
+        lpf.addRow("预置 Prompt", self.ai_prompt)
+        lpf.addRow("追加 Prompt", self.ai_extra)
+        lp_note = QLabel("API Key 不写入日志；Stage-1 本地校验通过才提交输出；Apple Photos 兼容需按 docs 手工验证。")
+        lp_note.setWordWrap(True)
+        lp_note.setStyleSheet("color:#666;font-size:11px;")
+        lpf.addRow(lp_note)
+        layout.addWidget(lp)
+
         # Rename / output simple enables
         other = QGroupBox("其他步骤")
         of = QVBoxLayout(other)
@@ -801,6 +878,29 @@ class SettingsDialog(QDialog):
         self.offset_max.setValue(cfg.steps.device_metadata.offset_max_minutes)
         self.software.setText(cfg.steps.device_metadata.software_tag)
 
+        self.chk_rotate.setChecked(cfg.steps.rotate_crop.enabled)
+        self.min_angle.setValue(float(cfg.steps.rotate_crop.min_angle))
+        self.max_angle.setValue(float(cfg.steps.rotate_crop.max_angle))
+
+        self.chk_hidden.setChecked(cfg.steps.hidden_image.enabled)
+        self.hidden_dir.setText(cfg.steps.hidden_image.library_dir or "")
+        try:
+            self.hidden_opacity.setValue(float(cfg.steps.hidden_image.opacity))
+        except Exception:
+            self.hidden_opacity.setValue(0.02)
+
+        self.chk_live.setChecked(cfg.steps.live_photo.enabled)
+        vidx = self.video_source.findData(cfg.steps.live_photo.video_source)
+        self.video_source.setCurrentIndex(max(0, vidx))
+        self.lp_duration.setValue(float(cfg.steps.live_photo.local_motion.duration_seconds))
+        self.lp_strength.setValue(float(cfg.steps.live_photo.local_motion.motion_strength))
+        self.ai_provider.setText(cfg.steps.live_photo.ai_video.provider or "")
+        self.ai_model.setText(cfg.steps.live_photo.ai_video.model or "")
+        self.ai_endpoint.setText(cfg.steps.live_photo.ai_video.endpoint or "")
+        self.ai_key.setText(cfg.steps.live_photo.ai_video.api_key or "")
+        self.ai_prompt.setText(cfg.steps.live_photo.ai_video.prompt or "")
+        self.ai_extra.setText(cfg.steps.live_photo.ai_video.extra_prompt or "")
+
         self.chk_rename.setChecked(cfg.steps.rename.enabled)
         self.chk_output_write.setChecked(cfg.steps.output_write.enabled)
 
@@ -874,6 +974,32 @@ class SettingsDialog(QDialog):
         cfg.steps.device_metadata.offset_min_minutes = omin
         cfg.steps.device_metadata.offset_max_minutes = omax
         cfg.steps.device_metadata.software_tag = self.software.text().strip() or "iOS Camera"
+
+        if float(self.min_angle.value()) > float(self.max_angle.value()):
+            raise ValueError("最小旋转角度不能大于最大旋转角度")
+        cfg.steps.rotate_crop.enabled = self.chk_rotate.isChecked()
+        cfg.steps.rotate_crop.min_angle = float(self.min_angle.value())
+        cfg.steps.rotate_crop.max_angle = float(self.max_angle.value())
+
+        op = float(self.hidden_opacity.value())
+        if not (0 < op <= 0.5):
+            raise ValueError("隐藏图片不透明度应在 (0, 0.5] 内")
+        cfg.steps.hidden_image.enabled = self.chk_hidden.isChecked()
+        cfg.steps.hidden_image.library_dir = self.hidden_dir.text().strip()
+        cfg.steps.hidden_image.opacity = op
+
+        cfg.steps.live_photo.enabled = self.chk_live.isChecked()
+        cfg.steps.live_photo.video_source = str(self.video_source.currentData() or "local_motion")
+        cfg.steps.live_photo.local_motion.duration_seconds = float(self.lp_duration.value())
+        cfg.steps.live_photo.local_motion.motion_strength = float(self.lp_strength.value())
+        cfg.steps.live_photo.ai_video.provider = self.ai_provider.text().strip()
+        cfg.steps.live_photo.ai_video.model = self.ai_model.text().strip()
+        cfg.steps.live_photo.ai_video.endpoint = self.ai_endpoint.text().strip()
+        if self.ai_key.text():
+            cfg.steps.live_photo.ai_video.api_key = self.ai_key.text()
+        if self.ai_prompt.text().strip():
+            cfg.steps.live_photo.ai_video.prompt = self.ai_prompt.text().strip()
+        cfg.steps.live_photo.ai_video.extra_prompt = self.ai_extra.text().strip()
 
         cfg.steps.rename.enabled = self.chk_rename.isChecked()
         cfg.steps.output_write.enabled = self.chk_output_write.isChecked()
