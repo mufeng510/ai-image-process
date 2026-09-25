@@ -16,6 +16,15 @@ if (-not (Test-Path $dest)) {
   Write-Host "[build] WARNING: Tools\exiftool\exiftool.exe missing; device metadata step will be limited"
 }
 
+# FFmpeg is required for Live Photo (headline feature): fetch the pinned
+# binary before packaging. Fail fast instead of shipping without it.
+& (Join-Path $Root "scripts\fetch_ffmpeg.ps1")
+$ffmpeg = Join-Path $Root "Tools\ffmpeg\ffmpeg.exe"
+if (-not (Test-Path $ffmpeg)) {
+  throw "[build] Tools\ffmpeg\ffmpeg.exe missing after fetch; refusing to package without FFmpeg"
+}
+Write-Host "[build] bundled FFmpeg: $ffmpeg"
+
 if (Test-Path "dist\AI-Image-Process") { Remove-Item -Recurse -Force "dist\AI-Image-Process" }
 if (Test-Path "build\pyinstaller") { Remove-Item -Recurse -Force "build\pyinstaller" }
 

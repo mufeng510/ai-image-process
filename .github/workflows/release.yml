@@ -67,6 +67,8 @@ jobs:
             if (-not (Test-Path $p)) { throw "missing required artifact: $p" }
             Write-Host "ok $p ($((Get-Item $p).Length) bytes)"
           }
+          # Live Photo headline feature: the portable zip must bundle FFmpeg.
+          python -c "import zipfile; n=zipfile.ZipFile('dist/AI-Image-Process-windows-x64-portable.zip').namelist(); assert any('Tools/ffmpeg/ffmpeg.exe' in x.replace(chr(92),'/') for x in n), 'ffmpeg missing in portable zip'; print('ffmpeg bundled ok')"
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
@@ -115,6 +117,8 @@ jobs:
             cp -f "${files[0]}" "$target"
           fi
           test -f "$target"
+          # Live Photo headline feature: the portable zip must bundle FFmpeg.
+          python3 -c "import zipfile; n=zipfile.ZipFile('$target').namelist(); assert any('Tools/ffmpeg/ffmpeg' in x for x in n), 'ffmpeg missing in portable zip'; print('ffmpeg bundled ok')"
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
@@ -151,6 +155,8 @@ jobs:
           primary="${files[0]}"
           echo "PRIMARY_MAC_ZIP=$(basename "$primary")" >> "$GITHUB_ENV"
           test -f "$primary"
+          # Live Photo headline feature: the portable zip must bundle FFmpeg.
+          python3 -c "import zipfile; n=zipfile.ZipFile('$primary').namelist(); assert any('Tools/ffmpeg/ffmpeg' in x for x in n), 'ffmpeg missing in portable zip'; print('ffmpeg bundled ok')"
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4

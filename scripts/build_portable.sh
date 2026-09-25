@@ -18,6 +18,14 @@ echo "[build] python=$PYTHON"
 # Optional provenance package (can bloat; leave commented by default)
 # "$PYTHON" -m pip install "remove-ai-watermarks>=0.26.0"
 
+# FFmpeg is required for Live Photo: fetch the pinned binary before
+# packaging. Fail fast instead of shipping without it.
+bash "$ROOT/scripts/fetch_ffmpeg.sh"
+test -x "$ROOT/Tools/ffmpeg/ffmpeg" || {
+  echo "[build] Tools/ffmpeg/ffmpeg missing after fetch; refusing to package without FFmpeg" >&2
+  exit 1
+}
+
 rm -rf build/pyinstaller dist/AI-Image-Process
 "$PYTHON" -m PyInstaller --noconfirm --clean --distpath dist --workpath build/pyinstaller \
   build/ai-image-process.spec

@@ -23,7 +23,17 @@ def _bundled_candidates(names: list[str]) -> list[Path]:
 
 
 def _looks_runnable(p: Path) -> bool:
-    return p.exists() and p.is_file()
+    if not p.exists() or not p.is_file():
+        return False
+    # Portable zips may lose the unix exec bit; the file is ours (app-owned
+    # Tools dir), so restore it best-effort instead of reporting "missing".
+    if os.name != "nt" and not os.access(p, os.X_OK):
+        try:
+            mode = p.stat().st_mode | 0o755
+            os.chmod(p, mode)
+        except OSError:
+            pass
+    return os.access(p, os.X_OK) or p.suffix.lower() == ".exe"
 
 
 def resolve_ffmpeg() -> Path | None:
