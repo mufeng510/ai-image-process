@@ -17,3 +17,9 @@ build/pyinstaller/
 output/
 *.log
 .DS_Store
+# FFmpeg binaries are fetched locally (~80MB), never committed.
+# Version lock lives in Tools/ffmpeg/SOURCE.txt (tracked).
+Tools/ffmpeg/ffmpeg.exe
+Tools/ffmpeg/ffprobe.exe
+Tools/ffmpeg/ffmpeg
+Tools/ffmpeg/ffprobe

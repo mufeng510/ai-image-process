@@ -82,32 +82,60 @@ def is_decodable_image(path: Path) -> bool:
 
 def scan_hidden_library(library_dir: Path, supported_exts: set[str]) -> list[Path]:
     """Scan direct children only; return sorted list of usable images."""
+    return [e.path for e in scan_hidden_library_detailed(library_dir, supported_exts) if e.usable]
+
+
+@dataclass
+class HiddenScanEntry:
+    path: Path
+    usable: bool
+    reason: str = ""  # non-empty when skipped; user-facing Chinese text
+
+
+def scan_hidden_library_detailed(
+    library_dir: Path, supported_exts: set[str]
+) -> list[HiddenScanEntry]:
+    """Scan direct children, reporting usable images AND skipped files.
+
+    Skipped entries carry a reason so the GUI count and preflight logs can
+    show exactly which files were excluded (non-image / bad ext / corrupt /
+    directory / symlink escape) instead of silently dropping them.
+    """
     lib = Path(library_dir)
     if not lib.is_dir():
         return []
-    usable: list[Path] = []
     try:
         children = sorted(lib.iterdir(), key=lambda p: p.name.lower())
     except OSError:
         return []
+    out: list[HiddenScanEntry] = []
     for child in children:
         try:
+            if child.is_dir() and not child.is_symlink():
+                out.append(HiddenScanEntry(child, False, "目录（仅统计直接图片文件）"))
+                continue
             if not child.is_file():
+                out.append(HiddenScanEntry(child, False, "非普通文件"))
                 continue
             if child.is_symlink() and not child.exists():
-                continue  # dangling link
+                out.append(HiddenScanEntry(child, False, "断开的符号链接"))
+                continue
             # Resolve symlink/junction targets; must stay inside the library.
             resolved = child.resolve()
             if not _is_within(resolved, lib):
+                out.append(HiddenScanEntry(child, False, "链接目标超出图片库范围"))
                 continue
         except OSError:
+            out.append(HiddenScanEntry(child, False, "无法读取"))
             continue
         if not is_supported_image(child, supported_exts):
+            out.append(HiddenScanEntry(child, False, f"扩展名不受支持（{child.suffix or '无扩展名'}）"))
             continue
         if not is_decodable_image(child):
+            out.append(HiddenScanEntry(child, False, "文件损坏或无法解码"))
             continue
-        usable.append(resolved if child.is_symlink() else child)
-    return usable
+        out.append(HiddenScanEntry(resolved if child.is_symlink() else child, True))
+    return out
 
 
 @dataclass

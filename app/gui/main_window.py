@@ -263,16 +263,27 @@ class MainWindow(QMainWindow):
             self._refresh_hidden_count()
 
     def _refresh_hidden_count(self) -> None:
-        from app.core.hidden_images import scan_hidden_library
+        from app.core.hidden_images import scan_hidden_library_detailed
 
         lib = self.hidden_edit.text().strip()
         if not lib:
             self.lbl_hidden_count.setText("可用图片：-")
+            self.lbl_hidden_count.setToolTip("")
             return
         try:
             exts = set(self._config.input.extensions or ["jpg", "jpeg", "png", "webp"])
-            pool = scan_hidden_library(Path(lib), {e.lower().lstrip(".") for e in exts})
-            self.lbl_hidden_count.setText(f"可用图片：{len(pool)} 张（仅 UI 展示，开始时重新预检）")
+            detailed = scan_hidden_library_detailed(
+                Path(lib), {e.lower().lstrip(".") for e in exts})
+            usable = [e for e in detailed if e.usable]
+            skipped = [e for e in detailed if not e.usable]
+            if skipped:
+                self.lbl_hidden_count.setText(
+                    f"可用图片：{len(usable)} 张（另有 {len(skipped)} 个不可用文件已过滤，悬停查看）")
+                self.lbl_hidden_count.setToolTip(
+                    "已过滤：\n" + "\n".join(f"{e.path.name}：{e.reason}" for e in skipped[:20]))
+            else:
+                self.lbl_hidden_count.setText(f"可用图片：{len(usable)} 张")
+                self.lbl_hidden_count.setToolTip("")
         except Exception:  # noqa: BLE001
             self.lbl_hidden_count.setText("可用图片：读取失败")
 

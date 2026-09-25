@@ -420,12 +420,26 @@ class SettingsDialog(QDialog):
         self.lp_strength.setDecimals(3)
         lpf.addRow("动态强度", self.lp_strength)
         self.ai_provider = QLineEdit()
+        self.ai_provider.setPlaceholderText("示例：my-provider（仅标识名称，不决定接口格式）")
+        self.ai_provider.setToolTip("提供方名称，仅用于标识和日志脱敏显示，不决定接口格式。")
         self.ai_model = QLineEdit()
+        self.ai_model.setPlaceholderText("示例：image-to-video-v1（以供应商文档中的模型名为准）")
+        self.ai_model.setToolTip("要调用的模型名称，必须与供应商文档一致，软件不预置任何模型。")
         self.ai_endpoint = QLineEdit()
+        self.ai_endpoint.setPlaceholderText("示例：https://api.example.com/v1/videos（以供应商文档为准）")
+        self.ai_endpoint.setToolTip(
+            "提交任务的 HTTPS 地址。软件只认通用契约：POST（image/model/prompt/duration）"
+            "返回 job_id 或 status_url；轮询返回 status + video_url。不符合会明确报错，不会伪造成功。")
         self.ai_key = QLineEdit()
+        self.ai_key.setPlaceholderText("示例：sk-…（只存本地配置，不写入日志）")
+        self.ai_key.setToolTip("API Key 只保存在本地配置并随请求发送，不会写入日志；导出配置请注意自行保管。")
         self.ai_key.setEchoMode(QLineEdit.EchoMode.Password)
         self.ai_prompt = QLineEdit()
+        self.ai_prompt.setPlaceholderText("默认已内置 subtle-motion 预置提示词，可留空使用默认")
+        self.ai_prompt.setToolTip("留空即使用内置默认提示词；填写则整体替换默认。")
         self.ai_extra = QLineEdit()
+        self.ai_extra.setPlaceholderText("示例：gentle breeze, keep colors unchanged（追加给默认提示词）")
+        self.ai_extra.setToolTip("追加方向拼接到预置提示词之后一并发送。")
         lpf.addRow("AI Provider", self.ai_provider)
         lpf.addRow("AI Model", self.ai_model)
         lpf.addRow("AI Endpoint", self.ai_endpoint)
@@ -436,6 +450,12 @@ class SettingsDialog(QDialog):
         lp_note.setWordWrap(True)
         lp_note.setStyleSheet("color:#666;font-size:11px;")
         lpf.addRow(lp_note)
+        ai_note = QLabel(
+            "填写说明：各供应商接口不同，先查其官方文档再填 Model/Endpoint；"
+            "软件不虚构任何厂商接口，地址或返回格式不符会在预检/运行时明确报错。")
+        ai_note.setWordWrap(True)
+        ai_note.setStyleSheet("color:#666;font-size:11px;")
+        lpf.addRow(ai_note)
         layout.addWidget(lp)
 
         # Rename / output simple enables

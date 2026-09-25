@@ -11,7 +11,7 @@ from app.core.errors import to_user_message
 from app.core.hidden_images import (
     assign_hidden_images,
     check_hidden_library_path_safety,
-    scan_hidden_library,
+    scan_hidden_library_detailed,
 )
 from app.core.image_metadata import extract_hidden_metadata_source
 from app.core.models import FileRecord
@@ -145,12 +145,22 @@ def run_preflight(
             return PreflightResult(ok=False, error=f"隐藏图片不透明度不合法：{opacity}（应为 0~0.5，默认 0.02）")
         exts = {e.lower().lstrip(".") for e in config.input.extensions}
         log("[Preflight] Checking hidden image library...")
-        pool = scan_hidden_library(lib, exts)
-        log(f"[Preflight] Hidden images: {len(pool)} / {len(records)}")
+        detailed = scan_hidden_library_detailed(lib, exts)
+        pool = [e.path for e in detailed if e.usable]
+        skipped = [e for e in detailed if not e.usable]
+        for e in skipped:
+            log(f"[Preflight] skip {e.path.name}：{e.reason}")
+        log(f"[Preflight] Hidden images: {len(pool)} / {len(records)}"
+            + (f"（另有 {len(skipped)} 个不可用文件未计入）" if skipped else ""))
         need = len(records)
         have = len(pool)
         if have < need:
             missing = need - have
+            skipped_note = ""
+            if skipped:
+                names = "、".join(e.path.name for e in skipped[:5])
+                more = f"等共 {len(skipped)} 个" if len(skipped) > 5 else ""
+                skipped_note = f"\n\n另有不可用文件未计入（{names}{more}），请检查这些文件。"
             return PreflightResult(
                 ok=False,
                 error=(
@@ -159,8 +169,10 @@ def run_preflight(
                     f"当前可用：\n{have} 张\n\n"
                     f"缺少：\n{missing} 张\n\n"
                     "请补充隐藏图片后再开始任务。"
+                    f"{skipped_note}"
                 ),
-                extra={"need": need, "have": have, "missing": missing},
+                extra={"need": need, "have": have, "missing": missing,
+                       "skipped": [str(e.path) for e in skipped]},
             )
         plan = assign_hidden_images([r.source_path for r in records], pool, rng)
         hidden_mapping = plan.mapping

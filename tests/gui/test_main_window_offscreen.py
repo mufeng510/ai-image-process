@@ -27,7 +27,18 @@ def qapp():
     yield app
 
 
-def test_main_window_builds(qapp):
+@pytest.fixture()
+def isolated_config(tmp_path, monkeypatch):
+    import app.gui.main_window as mw
+    from app.config.manager import ConfigManager
+
+    monkeypatch.setattr(
+        mw, "ConfigManager",
+        lambda *a, **k: ConfigManager(tmp_path / "test-config.json"),
+    )
+
+
+def test_main_window_builds(qapp, isolated_config):
     win = MainWindow()
     assert "AI Image Process" in win.windowTitle()
     assert win.btn_start is not None

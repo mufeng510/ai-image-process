@@ -1,0 +1,6 @@
+source: PyPI imageio-ffmpeg==0.6.0 (imageio_ffmpeg-0.6.0-py3-none-win_amd64.whl -> imageio_ffmpeg/binaries/ffmpeg-win-x86_64-v7.1.exe)
+ffmpeg_version_line: ffmpeg version 7.1-essentials_build-www.gyan.dev Copyright (c) 2000-2024 the FFmpeg developers
+encoders: libx264 present (verified in build configuration)
+ffprobe: not bundled by this source; app runs without ffprobe (validator BMFF fallback), prefers PATH ffprobe when present
+license: GPL static build (--enable-gpl). Release obligations in build/README.md.
+fetched_utc: 2026-09-25T10:00:00Z

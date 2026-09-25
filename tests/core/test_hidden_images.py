@@ -34,6 +34,40 @@ def test_scan_counts_only_usable(tmp_path):
     assert {p.name for p in pool} == {"a.jpg", "b.png"}
 
 
+def test_scan_detailed_reports_skip_reasons(tmp_path):
+    from app.core.hidden_images import scan_hidden_library_detailed
+
+    lib = tmp_path / "lib"; lib.mkdir()
+    _img(lib / "ok.jpg")
+    (lib / "note.txt").write_text("x")
+    (lib / "bad.jpg").write_bytes(b"not an image")
+    (lib / "sub").mkdir()
+    detailed = scan_hidden_library_detailed(lib, {"jpg", "jpeg", "png", "webp"})
+    by_name = {e.path.name: e for e in detailed}
+    assert by_name["ok.jpg"].usable
+    assert not by_name["note.txt"].usable and "扩展名" in by_name["note.txt"].reason
+    assert not by_name["bad.jpg"].usable and "损坏" in by_name["bad.jpg"].reason
+    assert not by_name["sub"].usable
+
+
+def test_precheck_error_mentions_skipped_files(tmp_path):
+    src = tmp_path / "in"; out = tmp_path / "out"; lib = tmp_path / "lib"
+    src.mkdir(); out.mkdir(); lib.mkdir()
+    _img(src / "s0.jpg", color=_COLORS[0])
+    _img(src / "s1.jpg", color=_COLORS[1])
+    (lib / "junk.txt").write_text("x")
+    (lib / "bad.jpg").write_bytes(b"corrupt")
+    cfg = default_config()
+    cfg.steps.provenance_cleanup.enabled = False
+    cfg.steps.device_metadata.enabled = False
+    cfg.steps.hidden_image.enabled = True
+    cfg.steps.hidden_image.library_dir = str(lib)
+    cfg.paths.temp_dir = str(tmp_path / "tmp")
+    r = run_job(cfg, [src], output_dir=out, seed=3, temp_base=tmp_path / "tmp")
+    assert r.preflight_failed is True
+    assert "不可用文件未计入" in (r.preflight_error or "")
+
+
 def test_scan_webp_png_jpeg(tmp_path):
     lib = tmp_path / "lib"; lib.mkdir()
     _img(lib / "a.jpg")

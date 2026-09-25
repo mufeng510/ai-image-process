@@ -35,12 +35,14 @@ class LocalMotionVideoGenerator(VideoGenerator):
         out = Path(ctx.work_dir) / "local_motion.mov"
         out.parent.mkdir(parents=True, exist_ok=True)
         # zoompan operates per-input-frame; single still looped.
+        # NOTE: zoompan has no `flags` option (it was rejected by ffmpeg
+        # 7.1 with "Option not found"); lanczos lives on the scale filter.
         filt = (
             f"scale={vw * 4}:{vh * 4}:flags=lanczos,"
             f"zoompan=z='min({z0}+{z1 - z0:.5f}*on/{max(1, n_frames - 1)}"
             f",{z1:.5f})':x='iw/2-(iw/zoom/2){direction:+d}*on/{max(1, n_frames - 1)}*10'"
-            f":y='ih/2-(ih/zoom/2)':d={n_frames}:fps={ctx.fps}:s={vw}x{vh}:"
-            "flags=lanczos,format=yuv420p"
+            f":y='ih/2-(ih/zoom/2)':d={n_frames}:fps={ctx.fps}:s={vw}x{vh},"
+            "format=yuv420p"
         )
         cmd = [
             str(self.ffmpeg), "-y",

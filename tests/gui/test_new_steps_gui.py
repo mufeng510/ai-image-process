@@ -34,7 +34,20 @@ def test_registry_contains_new_steps_in_order():
         assert reg.get(sid) is not None
 
 
-def test_main_window_toggles_and_hidden_count(qapp, tmp_path):
+def _isolated_config(monkeypatch, tmp_path):
+    """Point MainWindow at a throwaway config so tests never touch/read the
+    user's real config file (which may enable any steps)."""
+    import app.gui.main_window as mw
+    from app.config.manager import ConfigManager
+
+    monkeypatch.setattr(
+        mw, "ConfigManager",
+        lambda *a, **k: ConfigManager(tmp_path / "test-config.json"),
+    )
+
+
+def test_main_window_toggles_and_hidden_count(qapp, tmp_path, monkeypatch):
+    _isolated_config(monkeypatch, tmp_path)
     win = MainWindow()
     assert win.chk_rotate is not None and win.chk_hidden is not None and win.chk_live is not None
     assert win.chk_rotate.isChecked() is False
@@ -73,7 +86,8 @@ def test_settings_hidden_and_live_roundtrip(qapp):
     dlg.close()
 
 
-def test_preflight_error_popup_path(qapp):
+def test_preflight_error_popup_path(qapp, tmp_path, monkeypatch):
+    _isolated_config(monkeypatch, tmp_path)
     from app.core.models import JobResult
 
     win = MainWindow()
