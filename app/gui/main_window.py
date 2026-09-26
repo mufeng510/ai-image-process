@@ -152,7 +152,7 @@ class MainWindow(QMainWindow):
         self.btn_cancel.setEnabled(False)
         self.btn_cancel.clicked.connect(self._cancel)
         self.btn_iphone = QPushButton("导入 iPhone…")
-        self.btn_iphone.setToolTip("从输出目录准备 Live Photo 配对目录，优先指引爱思助手实况导入（需手动确认）")
+        self.btn_iphone.setToolTip("从输出目录准备 Live Photo 配对目录，指引爱思助手实况导入（需手动确认）")
         self.btn_iphone.clicked.connect(self._import_iphone)
         self.btn_settings = QPushButton("设置")
         self.btn_settings.clicked.connect(self._open_settings)
@@ -329,11 +329,8 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def _import_iphone(self) -> None:
-        """Guided iPhone import: pairs from output dir -> sync dir -> user sync."""
-        from app.core.iphone_import.apple_devices import AppleDevicesImporter
+        """iPhone import via i4Tools: pairs from output dir -> import dir -> user imports."""
         from app.core.iphone_import.i4tools import I4ToolsImporter
-        from app.core.iphone_import.itunes import ITunesImporter
-        from app.core.iphone_import.manual_sync import ManualSyncImporter
 
         out = self.out_edit.text().strip()
         if not out or not Path(out).is_dir():
@@ -345,22 +342,13 @@ class MainWindow(QMainWindow):
             return
         pairs = [(j, j.with_suffix(".mov") if j.with_suffix(".mov").exists() else None)
                  for j in jpgs]
-        det = ManualSyncImporter().detect()
-        det_i4 = I4ToolsImporter().detect()
-        if det_i4.get("i4tools_installed"):
-            imp: ManualSyncImporter = I4ToolsImporter()
-        elif det.get("apple_devices_installed"):
-            imp = AppleDevicesImporter()
-        elif det.get("itunes_installed"):
-            imp = ITunesImporter()
-        else:
-            imp = ManualSyncImporter()
+        imp = I4ToolsImporter()
         issues = imp.validate(pairs)
         if issues:
             QMessageBox.warning(self, "校验未通过", "\n".join(issues[:10]))
             return
         default_sync = str(Path(out).parent / "iphone-sync")
-        sync = QFileDialog.getExistingDirectory(self, "选择 iPhone 同步目录（专用目录）", default_sync)
+        sync = QFileDialog.getExistingDirectory(self, "选择实况导入目录（专用目录，供爱思助手批量导入）", default_sync)
         if not sync:
             # user cancelled the dialog: offer to create/use the default
             reply = QMessageBox.question(
@@ -376,7 +364,7 @@ class MainWindow(QMainWindow):
             return
         res = imp.import_live_photos(prepared)
         cap = imp.capability()
-        mode = "需手动在爱思助手/Apple Devices/iTunes 中确认导入" if cap.requires_user_sync else "自动导入"
+        mode = "需手动在爱思助手中确认导入" if cap.requires_user_sync else "自动导入"
         self._append_log(f"[iPhone] {mode}，同步目录：{prepared}")
         box = QMessageBox(self)
         box.setWindowTitle("导入 iPhone")

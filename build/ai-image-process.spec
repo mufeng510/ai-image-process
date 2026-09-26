@@ -67,8 +67,6 @@ hiddenimports = [
     "app.core.iphone_import.base",
     "app.core.iphone_import.manual_sync",
     "app.core.iphone_import.i4tools",
-    "app.core.iphone_import.apple_devices",
-    "app.core.iphone_import.itunes",
     "app.core.dependency_installer",
     "app.config",
     "PIL",

@@ -35,7 +35,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--video-source", choices=["local_motion", "ai_video"], default=None)
     p.add_argument("--list-steps", action="store_true", help="list registry steps in order and exit")
     p.add_argument("--prepare-iphone-import", default=None,
-                   help="prepare a dedicated iPhone sync dir from outputs and print guided steps (no auto import)")
+                   help="prepare a dedicated i4Tools live-photo import dir from outputs and print guided steps")
     p.add_argument("--json-summary", action="store_true", help="print job summary JSON")
     return p
 
@@ -103,7 +103,6 @@ def main(argv: list[str] | None = None) -> int:
     }
     if args.prepare_iphone_import and result.success:
         from app.core.iphone_import.i4tools import I4ToolsImporter
-        from app.core.iphone_import.manual_sync import ManualSyncImporter
 
         pairs = []
         for f in result.success:
@@ -113,10 +112,7 @@ def main(argv: list[str] | None = None) -> int:
             mov = jpg.with_suffix(".mov") if jpg else None
             pairs.append((jpg, mov if mov and mov.exists() else None))
         pairs = [(j, m) for j, m in pairs if j and j.exists()]
-        if I4ToolsImporter().detect().get("i4tools_installed"):
-            imp: ManualSyncImporter = I4ToolsImporter()
-        else:
-            imp = ManualSyncImporter()
+        imp = I4ToolsImporter()
         prepared = imp.prepare(pairs, Path(args.prepare_iphone_import))
         res = imp.import_live_photos(prepared)
         summary["iphone_import"] = {"prepared_dir": str(prepared), "message": res.message}

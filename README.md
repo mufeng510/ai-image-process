@@ -29,7 +29,7 @@
 - 拖拽/批量选择图片与文件夹，后台线程处理，进度 / 日志 / 取消
 - 版本化配置（导入 / 导出 / 重置），便携模式（配置 v2，老配置自动迁移，新功能默认关闭）
 - 内置 ExifTool（`Tools/exiftool/`），不依赖用户 PATH；Live Photo 本地动态需要 FFmpeg（按 `Tools/ffmpeg/` → PATH 顺序解析，未找到时仅禁用 Live Photo，不影响普通处理）
-- iPhone 导入：独立工具（非 Pipeline 步骤），主界面「导入 iPhone…」按钮或 CLI `--prepare-iphone-import`；当前为**引导式同步**（准备专用同步目录 + 打开 Apple Devices 指引用户同步），自动导入尚未经真实设备验证
+- iPhone 导入：独立工具（非 Pipeline 步骤），主界面「导入 iPhone…」按钮或 CLI `--prepare-iphone-import`；通过**爱思助手实况导入**（准备 JPG+MOV 同名配对目录，指引用户在爱思助手中批量导入并在手机端确认），无自动导入
 - 冻结版（安装包/便携包）内置 **纯 Python wheel 安装器**，无需本机 pip 即可在线安装可选依赖
 
 ## 下载安装
@@ -138,7 +138,7 @@ bash scripts/build_portable.sh
 app/
   core/          流水线、步骤实现、设备库、wheel 安装器、ExifTool 封装
     live_photo/  LivePhotoBuilder/Validator/MovieNormalizer/providers（local_motion/ai_video）
-    iphone_import/  Apple Devices/iTunes 引导式同步（manual_sync + 兼容后端）
+    iphone_import/  爱思助手实况导入（i4tools 后端；JPG+MOV 同名配对目录）
   gui/           PySide6 主界面、设置、后台 worker
   config/        版本化配置 schema 与路径（当前 v2）
   platform/      平台相关（Windows 静默子进程等）

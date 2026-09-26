@@ -49,9 +49,8 @@ python -m pytest tests/integration/live_photo -q
    python -m app <输入> -o E:\lp-out --enable-live-photo --json-summary
    ```
 2. 打开 GUI → 选择输出目录 → **导入 iPhone**（或 CLI `--prepare-iphone-import E:\lp-sync`），
-   优先按爱思助手实况导入指引操作（我的设备 → 照片 → 相机胶卷 → 导入实况照片 → 批量导入，
-   选择同步目录；JPG 与 MOV 同名配对，手机端打开照片处理工具确认）；
-   无爱思助手时才回退 Apple Devices 文件夹同步。
+   按爱思助手实况导入指引操作（我的设备 → 照片 → 相机胶卷 → 导入实况照片 → 批量导入，
+   选择导入目录；JPG 与 MOV 同名配对，手机端打开照片处理工具确认）。
 3. 在 iPhone 照片中确认：
    - [ ] 显示为**一张** Live Photo（左上角 LIVE 标记）
    - [ ] 长按可以播放动态
