@@ -71,5 +71,10 @@ def test_metadata_survives_rotate_and_hidden(tmp_path):
     assert len(outs) == 1
     with Image.open(outs[0]) as im:
         assert abs((im.size[0] / im.size[1]) - (200 / 150)) / (200 / 150) < 0.02  # aspect kept
-        exif = im.getexif()
-        assert len(exif) > 0  # device tags survived Pillow transforms
+        # EXIF survival needs a runnable ExifTool (Windows bundles exiftool.exe;
+        # Linux/macOS CI has none -> device step degrades to device-chosen-only).
+        from app.core.exiftool_runner import ExifToolRunner
+
+        if ExifToolRunner().available():
+            exif = im.getexif()
+            assert len(exif) > 0  # device tags survived Pillow transforms
