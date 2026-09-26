@@ -152,7 +152,7 @@ class MainWindow(QMainWindow):
         self.btn_cancel.setEnabled(False)
         self.btn_cancel.clicked.connect(self._cancel)
         self.btn_iphone = QPushButton("导入 iPhone…")
-        self.btn_iphone.setToolTip("从输出目录准备 Live Photo 同步目录，指引 Apple Devices/iTunes 同步（需手动确认）")
+        self.btn_iphone.setToolTip("从输出目录准备 Live Photo 配对目录，优先指引爱思助手实况导入（需手动确认）")
         self.btn_iphone.clicked.connect(self._import_iphone)
         self.btn_settings = QPushButton("设置")
         self.btn_settings.clicked.connect(self._open_settings)
@@ -331,6 +331,7 @@ class MainWindow(QMainWindow):
     def _import_iphone(self) -> None:
         """Guided iPhone import: pairs from output dir -> sync dir -> user sync."""
         from app.core.iphone_import.apple_devices import AppleDevicesImporter
+        from app.core.iphone_import.i4tools import I4ToolsImporter
         from app.core.iphone_import.itunes import ITunesImporter
         from app.core.iphone_import.manual_sync import ManualSyncImporter
 
@@ -345,8 +346,11 @@ class MainWindow(QMainWindow):
         pairs = [(j, j.with_suffix(".mov") if j.with_suffix(".mov").exists() else None)
                  for j in jpgs]
         det = ManualSyncImporter().detect()
-        if det.get("apple_devices_installed"):
-            imp: ManualSyncImporter = AppleDevicesImporter()
+        det_i4 = I4ToolsImporter().detect()
+        if det_i4.get("i4tools_installed"):
+            imp: ManualSyncImporter = I4ToolsImporter()
+        elif det.get("apple_devices_installed"):
+            imp = AppleDevicesImporter()
         elif det.get("itunes_installed"):
             imp = ITunesImporter()
         else:
@@ -372,7 +376,7 @@ class MainWindow(QMainWindow):
             return
         res = imp.import_live_photos(prepared)
         cap = imp.capability()
-        mode = "需手动在 Apple Devices/iTunes 中确认同步" if cap.requires_user_sync else "自动导入"
+        mode = "需手动在爱思助手/Apple Devices/iTunes 中确认导入" if cap.requires_user_sync else "自动导入"
         self._append_log(f"[iPhone] {mode}，同步目录：{prepared}")
         box = QMessageBox(self)
         box.setWindowTitle("导入 iPhone")

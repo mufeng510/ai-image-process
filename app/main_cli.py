@@ -102,6 +102,7 @@ def main(argv: list[str] | None = None) -> int:
         ],
     }
     if args.prepare_iphone_import and result.success:
+        from app.core.iphone_import.i4tools import I4ToolsImporter
         from app.core.iphone_import.manual_sync import ManualSyncImporter
 
         pairs = []
@@ -112,7 +113,10 @@ def main(argv: list[str] | None = None) -> int:
             mov = jpg.with_suffix(".mov") if jpg else None
             pairs.append((jpg, mov if mov and mov.exists() else None))
         pairs = [(j, m) for j, m in pairs if j and j.exists()]
-        imp = ManualSyncImporter()
+        if I4ToolsImporter().detect().get("i4tools_installed"):
+            imp: ManualSyncImporter = I4ToolsImporter()
+        else:
+            imp = ManualSyncImporter()
         prepared = imp.prepare(pairs, Path(args.prepare_iphone_import))
         res = imp.import_live_photos(prepared)
         summary["iphone_import"] = {"prepared_dir": str(prepared), "message": res.message}

@@ -4,6 +4,7 @@ from pathlib import Path
 from PIL import Image
 
 from app.core.iphone_import.apple_devices import AppleDevicesImporter
+from app.core.iphone_import.i4tools import I4ToolsImporter
 from app.core.iphone_import.itunes import ITunesImporter
 from app.core.iphone_import.manual_sync import ManualSyncImporter
 
@@ -27,3 +28,24 @@ def test_manual_prepare_and_capability(tmp_path):
 def test_backends_honest_flags():
     assert AppleDevicesImporter().capability().requires_user_sync is True
     assert ITunesImporter().capability().requires_user_sync is True
+    assert I4ToolsImporter().capability().requires_user_sync is True
+    assert I4ToolsImporter().capability().automatic is False
+
+
+def test_i4tools_requires_paired_mov(tmp_path):
+    jpg = tmp_path / "001.jpg"; mov = tmp_path / "001.mov"
+    Image.new("RGB", (32, 32), (1, 2, 3)).save(jpg)
+    mov.write_bytes(b"\x00" * 8192)
+    imp = I4ToolsImporter()
+    assert imp.validate([(jpg, mov)]) == []
+    # still without MOV fails matching in 爱思批量导入
+    assert imp.validate([(jpg, None)])
+    bad = tmp_path / "002.mov"
+    bad.write_bytes(b"\x00" * 8192)
+    assert imp.validate([(jpg, bad)])
+
+
+def test_i4tools_guided_steps(tmp_path):
+    imp = I4ToolsImporter()
+    res = imp.import_live_photos(tmp_path)
+    assert res.ok and "爱思助手" in res.message and "批量导入" in res.message
