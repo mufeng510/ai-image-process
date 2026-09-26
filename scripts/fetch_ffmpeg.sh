@@ -13,20 +13,22 @@ if [[ -x "$ROOT/.venv/bin/python" ]]; then
   PYTHON="$ROOT/.venv/bin/python"
 fi
 
-OS="$(uname -s)"
-ARCH="$(uname -m)"
-case "${OS}-${ARCH}" in
-  Linux-x86_64|Linux-amd64)   WHEEL_BIN="ffmpeg-linux-x86_64-v7.1" ;;
-  Darwin-arm64|Darwin-aarch64) WHEEL_BIN="ffmpeg-macos-arm64-v7.1" ;;
-  Darwin-x86_64)               WHEEL_BIN="ffmpeg-macos-x86_64-v7.1" ;;
-  *) echo "unsupported platform for ffmpeg fetch: ${OS}/${ARCH}" >&2; exit 1 ;;
-esac
-
 mkdir -p Tools/ffmpeg
 TMPD="$(mktemp -d)"
 trap 'rm -rf "$TMPD"' EXIT
 "$PYTHON" -m pip download "imageio-ffmpeg==${PACKAGE_VERSION}" --no-deps -d "$TMPD"
 WHL="$(ls "$TMPD"/*.whl | head -n 1)"
+# Probe the wheel for the actual binary name (version-proof: v7.1 vs v7.0.2,
+# aarch64 vs arm64 all vary by platform/release).
+WHEEL_BIN="$("$PYTHON" - "$WHL" <<'PY'
+import sys, zipfile
+with zipfile.ZipFile(sys.argv[1]) as zf:
+    cands = [n for n in zf.namelist()
+             if "/binaries/ffmpeg-" in n and not n.endswith("/")]
+    assert len(cands) == 1, cands
+    print(cands[0].rsplit("/", 1)[-1])
+PY
+)"
 "$PYTHON" - "$WHL" "$WHEEL_BIN" <<'PY'
 import sys, zipfile
 whl, member = sys.argv[1], sys.argv[2]
