@@ -86,6 +86,46 @@ def test_settings_hidden_and_live_roundtrip(qapp):
     dlg.close()
 
 
+def test_iphone_import_button_warns_without_output(qapp, tmp_path, monkeypatch):
+    _isolated_config(monkeypatch, tmp_path)
+    import app.gui.main_window as mw
+
+    win = MainWindow()
+    assert win.btn_iphone is not None
+    seen = {}
+    monkeypatch.setattr(mw.QMessageBox, "warning",
+                        lambda *a, **k: seen.setdefault("warned", True))
+    win.out_edit.setText("")
+    win._import_iphone()
+    assert seen.get("warned") is True
+    win.close()
+
+
+def test_iphone_import_prepares_pairs(qapp, tmp_path, monkeypatch):
+    _isolated_config(monkeypatch, tmp_path)
+    import app.gui.main_window as mw
+    from PIL import Image
+
+    out = tmp_path / "out"; out.mkdir()
+    Image.new("RGB", (32, 32), (1, 2, 3)).save(out / "001.jpg")
+    (out / "001.mov").write_bytes(b"\x00" * 8192)
+    win = MainWindow()
+    win.out_edit.setText(str(out))
+    sync = tmp_path / "sync"
+    monkeypatch.setattr(mw.QFileDialog, "getExistingDirectory",
+                        staticmethod(lambda *a, **k: ""))
+    monkeypatch.setattr(mw.QMessageBox, "question",
+                        staticmethod(lambda *a, **k: mw.QMessageBox.StandardButton.Yes))
+    shown = {}
+    monkeypatch.setattr(mw.QMessageBox, "exec",
+                        lambda self: shown.setdefault("shown", True))
+    win._import_iphone()
+    assert shown.get("shown") is True
+    prepared = Path(win.out_edit.text()).parent / "iphone-sync"
+    assert (prepared / "001.jpg").exists() and (prepared / "001.mov").exists()
+    win.close()
+
+
 def test_preflight_error_popup_path(qapp, tmp_path, monkeypatch):
     _isolated_config(monkeypatch, tmp_path)
     from app.core.models import JobResult

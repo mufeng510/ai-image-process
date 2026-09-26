@@ -151,10 +151,14 @@ class MainWindow(QMainWindow):
         self.btn_cancel = QPushButton("取消")
         self.btn_cancel.setEnabled(False)
         self.btn_cancel.clicked.connect(self._cancel)
+        self.btn_iphone = QPushButton("导入 iPhone…")
+        self.btn_iphone.setToolTip("从输出目录准备 Live Photo 同步目录，指引 Apple Devices/iTunes 同步（需手动确认）")
+        self.btn_iphone.clicked.connect(self._import_iphone)
         self.btn_settings = QPushButton("设置")
         self.btn_settings.clicked.connect(self._open_settings)
         action.addWidget(self.btn_start)
         action.addWidget(self.btn_cancel)
+        action.addWidget(self.btn_iphone)
         action.addStretch(1)
         action.addWidget(self.btn_settings)
         root.addLayout(action)
@@ -323,6 +327,60 @@ class MainWindow(QMainWindow):
         self._controller.cancel()
         self._append_log("已请求取消（将在当前文件完成后停止）…")
 
+    @Slot()
+    def _import_iphone(self) -> None:
+        """Guided iPhone import: pairs from output dir -> sync dir -> user sync."""
+        from app.core.iphone_import.apple_devices import AppleDevicesImporter
+        from app.core.iphone_import.itunes import ITunesImporter
+        from app.core.iphone_import.manual_sync import ManualSyncImporter
+
+        out = self.out_edit.text().strip()
+        if not out or not Path(out).is_dir():
+            QMessageBox.warning(self, "提示", "请先选择已生成 Live Photo 的输出目录。")
+            return
+        jpgs = sorted(Path(out).glob("*.jpg"))
+        if not jpgs:
+            QMessageBox.warning(self, "提示", f"输出目录中没有 JPG：\n{out}")
+            return
+        pairs = [(j, j.with_suffix(".mov") if j.with_suffix(".mov").exists() else None)
+                 for j in jpgs]
+        det = ManualSyncImporter().detect()
+        if det.get("apple_devices_installed"):
+            imp: ManualSyncImporter = AppleDevicesImporter()
+        elif det.get("itunes_installed"):
+            imp = ITunesImporter()
+        else:
+            imp = ManualSyncImporter()
+        issues = imp.validate(pairs)
+        if issues:
+            QMessageBox.warning(self, "校验未通过", "\n".join(issues[:10]))
+            return
+        default_sync = str(Path(out).parent / "iphone-sync")
+        sync = QFileDialog.getExistingDirectory(self, "选择 iPhone 同步目录（专用目录）", default_sync)
+        if not sync:
+            # user cancelled the dialog: offer to create/use the default
+            reply = QMessageBox.question(
+                self, "同步目录",
+                f"是否使用默认同步目录？\n{default_sync}\n（将自动创建，与隐藏图片库无关）")
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+            sync = default_sync
+        try:
+            prepared = imp.prepare(pairs, Path(sync))
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.critical(self, "准备失败", str(exc))
+            return
+        res = imp.import_live_photos(prepared)
+        cap = imp.capability()
+        mode = "需手动在 Apple Devices/iTunes 中确认同步" if cap.requires_user_sync else "自动导入"
+        self._append_log(f"[iPhone] {mode}，同步目录：{prepared}")
+        box = QMessageBox(self)
+        box.setWindowTitle("导入 iPhone")
+        box.setText(f"已准备 {len(pairs)} 对文件到同步目录（{mode}）。")
+        box.setInformativeText(res.message)
+        box.setDetailedText(f"同步目录：{prepared}\n后端：{imp.name}\n" + res.message)
+        box.exec()
+
     @Slot(object)
     def _on_progress(self, ev: object) -> None:
         if not isinstance(ev, ProgressEvent):
@@ -384,6 +442,7 @@ class MainWindow(QMainWindow):
     def _on_busy(self, busy: bool) -> None:
         self.btn_start.setEnabled(not busy)
         self.btn_cancel.setEnabled(busy)
+        self.btn_iphone.setEnabled(not busy)
         self.btn_add_files.setEnabled(not busy)
         self.btn_add_folder.setEnabled(not busy)
         self.btn_clear.setEnabled(not busy)
