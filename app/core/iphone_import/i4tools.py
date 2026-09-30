@@ -14,6 +14,8 @@ Research conclusion (see docs/live-photo-testing.md):
 """
 from __future__ import annotations
 
+import glob
+import os
 import subprocess
 from pathlib import Path
 
@@ -21,22 +23,98 @@ from app.core.iphone_import.base import ImportCapability, ImportResult
 from app.core.iphone_import.manual_sync import ManualSyncImporter
 
 
-I4TOOLS_HINTS = [
-    r"C:\Program Files\i4Tools\i4Tools.exe",
-    r"C:\Program Files (x86)\i4Tools\i4Tools.exe",
-    # Older installers used a Chinese folder name.
-    r"C:\Program Files\爱思助手\i4Tools.exe",
-    r"C:\Program Files (x86)\爱思助手\i4Tools.exe",
-    r"C:\Program Files\i4Tools7\i4Tools.exe",
-    r"C:\Program Files (x86)\i4Tools7\i4Tools.exe",
-]
+# Known install folder names; new major versions use versioned folders
+# (observed: i4Tools -> i4Tools7 -> i4Tools9), so detection also globs
+# i4Tools* and consults the uninstall registry (covers custom install dirs).
+_DIR_NAMES = ("i4Tools", "i4Tools7", "i4Tools9", "爱思助手")
+
+
+def _program_files_dirs() -> list[Path]:
+    dirs: list[Path] = []
+    for var in ("ProgramFiles", "ProgramW6432", "ProgramFiles(x86)"):
+        v = os.environ.get(var)
+        if v and Path(v) not in dirs:
+            dirs.append(Path(v))
+    for raw in (r"C:\Program Files", r"C:\Program Files (x86)"):
+        if Path(raw) not in dirs:
+            dirs.append(Path(raw))
+    return dirs
+
+
+def _registry_install_exe() -> str | None:
+    """Find i4Tools.exe via uninstall registry (custom install locations)."""
+    try:
+        import winreg
+    except ImportError:  # non-Windows
+        return None
+    roots = [
+        (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
+        (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"),
+        (winreg.HKEY_CURRENT_USER, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
+    ]
+    for root, sub in roots:
+        try:
+            with winreg.OpenKey(root, sub) as key:
+                subkeys = [winreg.EnumKey(key, i) for i in range(winreg.QueryInfoKey(key)[0])]
+        except OSError:
+            continue
+        for name in subkeys:
+            try:
+                with winreg.OpenKey(key, name) as sk:
+                    disp = str(winreg.QueryValueEx(sk, "DisplayName")[0])
+                    loc = ""
+                    for value in ("DisplayIcon", "InstallLocation"):
+                        try:
+                            loc = str(winreg.QueryValueEx(sk, value)[0])
+                            break
+                        except OSError:
+                            continue
+            except OSError:
+                continue
+            if "爱思" not in disp and "i4Tools" not in disp:
+                continue
+            loc = loc.split(",")[0].strip().strip('"')
+            if not loc:
+                continue
+            p = Path(loc)
+            if p.is_dir():
+                cand = p / "i4Tools.exe"
+                if cand.exists():
+                    return str(cand)
+            elif p.name.lower() == "i4tools.exe" and p.exists():
+                return str(p)
+    return None
+
+
+def _candidate_exes() -> list[str]:
+    cands: list[str] = []
+
+    def add(p: Path | str) -> None:
+        s = str(p)
+        if s and s not in cands:
+            cands.append(s)
+
+    for base in _program_files_dirs():
+        for name in _DIR_NAMES:
+            add(base / name / "i4Tools.exe")
+        try:
+            for hit in sorted(glob.glob(str(base / "i4Tools*" / "i4Tools.exe"))):
+                add(hit)
+            for hit in sorted(glob.glob(str(base / "*爱思*" / "i4Tools.exe"))):
+                add(hit)
+        except Exception:
+            pass
+    reg = _registry_install_exe()
+    if reg:
+        add(reg)
+    return cands
 
 
 class I4ToolsImporter(ManualSyncImporter):
     name = "i4tools"
 
     def detect(self) -> dict[str, object]:
-        found = [p for p in I4TOOLS_HINTS if Path(p).exists()]
+        found = [p for p in _candidate_exes() if Path(p).exists()]
         return {
             "i4tools_installed": bool(found),
             "paths": {"i4tools": found},
@@ -74,10 +152,12 @@ class I4ToolsImporter(ManualSyncImporter):
             "5. 在 iPhone 照片中确认显示为一张 Live Photo（左上角 LIVE，长按可播放）；若分裂为照片+视频两个文件，说明配对未被识别，请保留样本并反馈。",
         ]
         if not det["i4tools_installed"]:
+            checked = ", ".join(str(d) for d in _program_files_dirs())
             steps.insert(
                 0,
-                "未检测到爱思助手（默认路径 C:\\Program Files (x86)\\i4Tools\\i4Tools.exe）："
-                "请先从 i4.cn 官网安装后再导入（导入器不会伪造自动导入）。",
+                "未检测到爱思助手（已检查 Program Files 各版本目录与卸载注册表）："
+                f"{checked}。请先从 i4.cn 官网安装后再导入（导入器不会伪造自动导入）。"
+                "若安装在自定义位置仍提示未安装，请反馈安装路径。",
             )
         return ImportResult(
             ok=True,

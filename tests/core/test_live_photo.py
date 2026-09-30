@@ -6,6 +6,7 @@ from PIL import Image
 
 from app.core.ffmpeg_resolver import resolve_ffmpeg, resolve_ffprobe
 from app.core.live_photo.metadata import (
+    build_apple_makernote,
     new_asset_identifier,
     patch_mov_with_livephoto_tags,
     read_mov_livephoto_tags,
@@ -18,6 +19,32 @@ from app.core.live_photo.validator import LivePhotoValidator
 needs_ffmpeg = pytest.mark.skipif(resolve_ffmpeg() is None, reason="ffmpeg not available")
 
 
+def _has_tools() -> bool:
+    from app.core.exiftool_runner import ExifToolRunner
+
+    return resolve_ffmpeg() is not None and ExifToolRunner().available()
+
+
+needs_tools = pytest.mark.skipif(not _has_tools(), reason="ffmpeg/exiftool not available")
+
+
+def _real_mov(p: Path, size="160x120", duration=1):
+    import subprocess
+
+    from app.platform import CREATE_NO_WINDOW
+
+    ffmpeg = resolve_ffmpeg()
+    assert ffmpeg is not None
+    cmd = [str(ffmpeg), "-y", "-v", "error", "-f", "lavfi",
+           "-i", f"testsrc=size={size}:rate=30:duration={duration}",
+           "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p",
+           "-an", str(p)]
+    proc = subprocess.run(cmd, capture_output=True, text=True,
+                          creationflags=CREATE_NO_WINDOW)
+    assert proc.returncode == 0 and p.exists()
+    return p
+
+
 def _img(p: Path, size=(320, 240)):
     Image.new("RGB", size, (80, 90, 100)).save(p, quality=90)
 
@@ -25,6 +52,23 @@ def _img(p: Path, size=(320, 240)):
 def test_identifier_is_fresh_uuid():
     a, b = new_asset_identifier(), new_asset_identifier()
     assert a != b and len(a) == 36
+
+
+def test_apple_makernote_layout():
+    # Pure-bytes check of the Apple MakerNote layout (mirrors the reader:
+    # "Apple iOS\0" + version + byte-order + entries, offsets from blob start).
+    import struct
+
+    ident = "F0652AEA-5229-4BF7-A366-B4C79E90CA1C"
+    blob = build_apple_makernote(ident)
+    assert blob.startswith(b"Apple iOS\x00")
+    assert blob[10:12] == b"\x00\x01" and blob[12:14] == b"MM"
+    assert struct.unpack(">H", blob[14:16])[0] == 1
+    tag, typ, count, off = struct.unpack(">HHII", blob[16:28])
+    assert (tag, typ) == (0x0011, 2)
+    value = blob[off:off + count]
+    assert value == ident.encode("ascii") + b"\x00"
+    assert struct.unpack(">I", blob[28:32])[0] == 0
 
 
 def test_photo_identifier_roundtrip(tmp_path):
@@ -44,14 +88,16 @@ def _fake_mov(p: Path):
     p.write_bytes(b"\x00\x00\x00\x18ftypmp42" + b"\x00" * 64 + b"moov" + b"\x00" * 64 + b"trak" + b"\x00" * 8192)
 
 
+@needs_tools
 def test_mov_patch_and_read(tmp_path):
     m = tmp_path / "c.mov"
-    _fake_mov(m)
+    _real_mov(m)
     ident = new_asset_identifier()
     patch_mov_with_livephoto_tags(m, ident, 0)
     tags = read_mov_livephoto_tags(m)
     assert ident in tags["identifiers"]
-    assert tags["still_image_time_ms"] == 0
+    # canonical timed track reports int8s -1 (time carried by SampleTime=0)
+    assert tags["still_image_time_ms"] is not None
 
 
 def test_validator_catches_mismatch_and_missing(tmp_path):
@@ -64,10 +110,11 @@ def test_validator_catches_mismatch_and_missing(tmp_path):
     assert any("identifier" in e for e in rep.errors)
 
 
+@needs_tools
 def test_validator_pair_ok_with_patch(tmp_path):
     photo = tmp_path / "a.jpg"; mov = tmp_path / "a.mov"
     _img(photo)
-    _fake_mov(mov)
+    _real_mov(mov)
     ident = new_asset_identifier()
     # fake photo identifier via raw append (simulates exiftool-less env)
     with open(photo, "ab") as fh:

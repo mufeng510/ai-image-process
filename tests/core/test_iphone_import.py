@@ -22,6 +22,20 @@ def test_i4tools_prepare_and_capability(tmp_path):
     assert res.ok and "爱思助手" in res.message and "批量导入" in res.message
 
 
+def test_i4tools_detect_versioned_dir(tmp_path, monkeypatch):
+    # Regression: installs use versioned folders (i4Tools9, ...), not just i4Tools.
+    fake_base = tmp_path / "PF"
+    exe = fake_base / "i4Tools99" / "i4Tools.exe"
+    exe.parent.mkdir(parents=True)
+    exe.write_bytes(b"MZ")
+    monkeypatch.setenv("ProgramFiles", str(fake_base))
+    monkeypatch.setenv("ProgramW6432", str(fake_base))
+    monkeypatch.setenv("ProgramFiles(x86)", str(fake_base))
+    det = I4ToolsImporter().detect()
+    assert det["i4tools_installed"] is True
+    assert str(exe) in det["paths"]["i4tools"]
+
+
 def test_i4tools_requires_paired_mov(tmp_path):
     jpg = tmp_path / "001.jpg"; mov = tmp_path / "001.mov"
     Image.new("RGB", (32, 32), (1, 2, 3)).save(jpg)

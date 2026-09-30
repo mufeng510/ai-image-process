@@ -12,12 +12,22 @@ TARGET_FPS = 30.0
 
 def normalize_movie(src: Path, dest: Path, *, ffmpeg: Path, duration_seconds: float = 3.0,
                     still_size: tuple[int, int] | None = None) -> Path:
-    """Re-encode to MOV/H.264/yuv420p, no audio.
+    """Re-encode to MOV/H.264/yuv420p + silent AAC audio.
 
     When `still_size` is given, the output is scaled+cropped to exactly the
     still aspect (cover-style center crop, no stretch, no black bars) with
     the long side capped at 1920, so Stage-1 aspect validation passes for
     any provider-native aspect.
+
+    NOTE: no `faststart` (moov stays AFTER mdat) on purpose - the
+    still-image-time timed track is spliced in afterwards by
+    timed_track.add_still_image_time_track(), which appends the timed sample
+    to mdat and the trak to moov without moving existing video chunks (no
+    stco patching needed in this layout).
+
+    NOTE: a silent AAC audio track is always muxed. Real iPhone Live Photos
+    always carry audio; a video-only MOV is a needless strict-importer risk
+    for iTools.
     """
     dest.parent.mkdir(parents=True, exist_ok=True)
     if still_size and still_size[0] > 0 and still_size[1] > 0:
@@ -32,12 +42,15 @@ def normalize_movie(src: Path, dest: Path, *, ffmpeg: Path, duration_seconds: fl
         vf = "scale='min(1920,iw)':'-2',scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p"
     cmd = [
         str(ffmpeg), "-y", "-i", str(src),
+        "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
+        "-map", "0:v:0", "-map", "1:a:0",
         "-vf", vf,
         "-r", str(int(TARGET_FPS)),
         "-t", str(float(duration_seconds)),
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
-        "-pix_fmt", "yuv420p", "-an",
-        "-movflags", "faststart",
+        "-pix_fmt", "yuv420p",
+        "-c:a", "aac", "-b:a", "128k",
+        "-shortest",
         str(dest),
     ]
     proc = subprocess.run(cmd, capture_output=True, text=True, check=False,

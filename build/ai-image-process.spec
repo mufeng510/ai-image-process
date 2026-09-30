@@ -59,6 +59,7 @@ hiddenimports = [
     "app.core.live_photo.metadata",
     "app.core.live_photo.movie",
     "app.core.live_photo.models",
+    "app.core.live_photo.timed_track",
     "app.core.live_photo.providers",
     "app.core.live_photo.providers.base",
     "app.core.live_photo.providers.local_motion",
