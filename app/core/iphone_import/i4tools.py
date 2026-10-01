@@ -110,6 +110,37 @@ def _candidate_exes() -> list[str]:
     return cands
 
 
+def _runas_launch(exe: str) -> bool:
+    """Launch exe requesting elevation (UAC prompt). Returns True if accepted."""
+    import ctypes
+
+    rc = ctypes.windll.shell32.ShellExecuteW(None, "runas", exe, None, None, 1)
+    return int(rc) > 32
+
+
+def _launch_i4tools(exe: str) -> tuple[bool, str]:
+    """Best-effort launch of iTools. Never raises; returns (opened, detail).
+
+    i4Tools.exe requires elevation (plain Popen fails with WinError 740),
+    so fall back to a runas/UAC launch before giving up.
+    """
+    try:
+        subprocess.Popen([exe], cwd=str(Path(exe).parent))
+        return True, "已拉起爱思助手"
+    except OSError as exc:
+        last = f"直接拉起失败({exc})"
+    except Exception as exc:  # noqa: BLE001
+        return False, f"拉起失败({exc})，请手动打开爱思助手"
+    if os.name == "nt":
+        try:
+            if _runas_launch(exe):
+                return True, "已通过管理员权限拉起爱思助手（请在 UAC 弹窗点“是”）"
+            last = f"{last}；提权拉起被拒绝或失败"
+        except Exception as exc:  # noqa: BLE001
+            last = f"{last}；提权拉起失败({exc})"
+    return False, last + "；请手动打开爱思助手继续"
+
+
 class I4ToolsImporter(ManualSyncImporter):
     name = "i4tools"
 
@@ -137,13 +168,7 @@ class I4ToolsImporter(ManualSyncImporter):
     def import_live_photos(self, prepared: Path) -> ImportResult:
         det = self.detect()
         exe_list = det["paths"]["i4tools"]  # type: ignore[index]
-        opened = False
-        if exe_list:
-            try:
-                subprocess.Popen([exe_list[0]])
-                opened = True
-            except Exception:
-                opened = False
+        opened, launch_detail = _launch_i4tools(exe_list[0]) if exe_list else (False, "")
         steps = [
             "1. 用 USB 连接 iPhone 并在手机上信任此电脑，打开爱思助手并等待识别设备。",
             f"2. 在爱思助手中进入：我的设备 → 照片 → 相机胶卷 → 导入实况照片 → 批量导入，选择文件夹：{prepared}",
@@ -151,7 +176,9 @@ class I4ToolsImporter(ManualSyncImporter):
             "4. 按爱思助手提示在手机上打开 照片处理工具/极速版（首次需安装并授予照片访问权限），等待导入完成。",
             "5. 在 iPhone 照片中确认显示为一张 Live Photo（左上角 LIVE，长按可播放）；若分裂为照片+视频两个文件，说明配对未被识别，请保留样本并反馈。",
         ]
-        if not det["i4tools_installed"]:
+        if det["i4tools_installed"]:
+            steps.insert(0, f"爱思助手唤起状态：{launch_detail}。")
+        else:
             checked = ", ".join(str(d) for d in _program_files_dirs())
             steps.insert(
                 0,
@@ -163,7 +190,7 @@ class I4ToolsImporter(ManualSyncImporter):
             ok=True,
             message="\n".join(steps),
             prepared_dir=prepared,
-            extra={"opened_app": opened, **det},
+            extra={"opened_app": opened, "launch_detail": launch_detail, **det},
         )
 
     def capability(self) -> ImportCapability:

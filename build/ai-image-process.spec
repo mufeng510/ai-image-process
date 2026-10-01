@@ -8,6 +8,8 @@ from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_all
 
+import sys
+
 block_cipher = None
 
 # SPECPATH is the directory containing this spec file (build/)
@@ -23,6 +25,24 @@ datas = [
     (str(repo / "assets" / "devices" / "phones.json"), "assets/devices"),
     (str(repo / "assets" / "icc" / "sRGB-IEC61966-2.1.icc"), "assets/icc"),
 ]
+
+# App icons: runtime window icon (PNG) + EXE icon (ICO/ICNS).
+# Best-effort: packaging must not fail when absent.
+_icons_dir = repo / "assets" / "icons"
+for _name in ("icon.png", "icon-256.png", "icon.ico", "icon.icns"):
+    _p = _icons_dir / _name
+    if _p.is_file():
+        datas.append((str(_p), "assets/icons"))
+
+_icon_file = None
+if sys.platform == "darwin":
+    _icns = _icons_dir / "icon.icns"
+    if _icns.is_file():
+        _icon_file = str(_icns)
+if _icon_file is None:
+    _ico = _icons_dir / "icon.ico"
+    if _ico.is_file():
+        _icon_file = str(_ico)
 
 exif_dir = repo / "Tools" / "exiftool"
 if exif_dir.exists():
@@ -40,6 +60,7 @@ hiddenimports = [
     "app.main_cli",
     "app.gui",
     "app.gui.app",
+    "app.gui.icons",
     "app.gui.main_window",
     "app.gui.settings_dialog",
     "app.gui.workers.pipeline_worker",
@@ -123,6 +144,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=_icon_file,
 )
 
 coll = COLLECT(

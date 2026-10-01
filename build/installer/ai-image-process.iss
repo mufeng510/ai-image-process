@@ -2,7 +2,7 @@
 ; Expects dist\AI-Image-Process\ produced by scripts/build_windows.ps1
 
 #define MyAppName "AI Image Process"
-#define MyAppVersion "0.1.0"
+#define MyAppVersion "0.3.0"
 #define MyAppPublisher "mufeng"
 #define MyAppExeName "AI-Image-Process.exe"
 #define MyAppId "AI-Image-Process-Desktop"
@@ -12,6 +12,7 @@ AppId={{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
+SetupIconFile=..\..\assets\icons\icon.ico
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes

@@ -3,10 +3,11 @@ from pathlib import Path
 
 from PIL import Image
 
+from app.core.iphone_import import i4tools as i4t
 from app.core.iphone_import.i4tools import I4ToolsImporter
 
 
-def test_i4tools_prepare_and_capability(tmp_path):
+def test_i4tools_prepare_and_capability(tmp_path, monkeypatch):
     jpg = tmp_path / "001.jpg"; mov = tmp_path / "001.mov"
     Image.new("RGB", (32, 32), (1, 2, 3)).save(jpg)
     mov.write_bytes(b"\x00" * 8192)
@@ -17,9 +18,36 @@ def test_i4tools_prepare_and_capability(tmp_path):
     assert imp.capability().requires_user_sync is True
     dest = imp.prepare([(jpg, mov)], tmp_path / "sync")
     assert (dest / "001.jpg").exists() and (dest / "001.mov").exists()
-    # import dir must be independent (caller-provided, not the hidden library)
+    # import dir must be independent (caller-provided, not the hidden library);
+    # stub the launcher so tests never pop UAC / real apps.
+    monkeypatch.setattr(i4t, "_launch_i4tools", lambda exe: (True, "test-launched"))
     res = imp.import_live_photos(dest)
     assert res.ok and "爱思助手" in res.message and "批量导入" in res.message
+    assert res.extra["opened_app"] is True
+
+
+def test_i4tools_launch_fallback_on_elevation(tmp_path, monkeypatch):
+    # Regression (WinError 740): plain Popen fails for iTools (needs admin),
+    # so the importer must fall back to runas instead of silently doing nothing.
+    import subprocess as sp
+
+    calls: dict = {}
+
+    def fake_popen(*a, **k):
+        raise OSError(740, "elevation required")
+
+    def fake_runas(exe: str) -> bool:
+        calls["exe"] = exe
+        return True
+
+    monkeypatch.setattr(sp, "Popen", fake_popen)
+    monkeypatch.setattr(i4t, "_runas_launch", fake_runas)
+    opened, detail = i4t._launch_i4tools(r"C:\fake\i4Tools.exe")
+    assert opened is True and calls.get("exe") == r"C:\fake\i4Tools.exe"
+
+    monkeypatch.setattr(i4t, "_runas_launch", lambda exe: False)
+    opened, detail = i4t._launch_i4tools(r"C:\fake\i4Tools.exe")
+    assert opened is False and "手动" in detail
 
 
 def test_i4tools_detect_versioned_dir(tmp_path, monkeypatch):

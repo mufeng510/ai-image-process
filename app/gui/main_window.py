@@ -35,6 +35,14 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle(f"AI Image Process  v{__version__}")
+        try:
+            from app.gui.icons import get_app_icon
+
+            _icon = get_app_icon()
+            if _icon is not None:
+                self.setWindowIcon(_icon)
+        except Exception:  # noqa: BLE001
+            pass
         self.resize(880, 680)
 
         self._cfg_mgr = ConfigManager(user_config_dir() / "config.json")
@@ -365,7 +373,9 @@ class MainWindow(QMainWindow):
         res = imp.import_live_photos(prepared)
         cap = imp.capability()
         mode = "需手动在爱思助手中确认导入" if cap.requires_user_sync else "自动导入"
-        self._append_log(f"[iPhone] {mode}，同步目录：{prepared}")
+        launch = str((res.extra or {}).get("launch_detail") or "")
+        self._append_log(f"[iPhone] {mode}，同步目录：{prepared}"
+                         + (f"，{launch}" if launch else ""))
         box = QMessageBox(self)
         box.setWindowTitle("导入 iPhone")
         box.setText(f"已准备 {len(pairs)} 对文件到同步目录（{mode}）。")
