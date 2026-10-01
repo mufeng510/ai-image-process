@@ -20,6 +20,12 @@ def test_i4tools_prepare_and_capability(tmp_path, monkeypatch):
     assert (dest / "001.jpg").exists() and (dest / "001.mov").exists()
     # import dir must be independent (caller-provided, not the hidden library);
     # stub the launcher so tests never pop UAC / real apps.
+    # Simulate an installed iTools: CI runners have none, and without an exe
+    # the launcher stub would never be reached (opened_app would stay False).
+    monkeypatch.setattr(
+        I4ToolsImporter, "detect",
+        lambda self: {"i4tools_installed": True, "paths": {"i4tools": ["C:\\fake\\i4Tools.exe"]}},
+    )
     monkeypatch.setattr(i4t, "_launch_i4tools", lambda exe: (True, "test-launched"))
     res = imp.import_live_photos(dest)
     assert res.ok and "爱思助手" in res.message and "批量导入" in res.message
@@ -29,7 +35,12 @@ def test_i4tools_prepare_and_capability(tmp_path, monkeypatch):
 def test_i4tools_launch_fallback_on_elevation(tmp_path, monkeypatch):
     # Regression (WinError 740): plain Popen fails for iTools (needs admin),
     # so the importer must fall back to runas instead of silently doing nothing.
+    # Simulate Windows: the runas fallback is gated on os.name == "nt", so on
+    # Linux/macOS CI the fallback would otherwise be skipped entirely.
+    import os
     import subprocess as sp
+
+    monkeypatch.setattr(os, "name", "nt")
 
     calls: dict = {}
 
