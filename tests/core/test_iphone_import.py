@@ -35,12 +35,11 @@ def test_i4tools_prepare_and_capability(tmp_path, monkeypatch):
 def test_i4tools_launch_fallback_on_elevation(tmp_path, monkeypatch):
     # Regression (WinError 740): plain Popen fails for iTools (needs admin),
     # so the importer must fall back to runas instead of silently doing nothing.
-    # Simulate Windows: the runas fallback is gated on os.name == "nt", so on
-    # Linux/macOS CI the fallback would otherwise be skipped entirely.
-    import os
-    import subprocess as sp
-
-    monkeypatch.setattr(os, "name", "nt")
+    # Fully hermetic: stub the module's own `os`/`subprocess` references so the
+    # test behaves identically on Windows and on Linux/macOS CI (where the
+    # runas fallback would otherwise be skipped via os.name, and no iTools
+    # exists). _launch_i4tools only uses os.name and subprocess.Popen.
+    import types
 
     calls: dict = {}
 
@@ -51,7 +50,8 @@ def test_i4tools_launch_fallback_on_elevation(tmp_path, monkeypatch):
         calls["exe"] = exe
         return True
 
-    monkeypatch.setattr(sp, "Popen", fake_popen)
+    monkeypatch.setattr(i4t, "os", types.SimpleNamespace(name="nt"))
+    monkeypatch.setattr(i4t, "subprocess", types.SimpleNamespace(Popen=fake_popen))
     monkeypatch.setattr(i4t, "_runas_launch", fake_runas)
     opened, detail = i4t._launch_i4tools(r"C:\fake\i4Tools.exe")
     assert opened is True and calls.get("exe") == r"C:\fake\i4Tools.exe"
