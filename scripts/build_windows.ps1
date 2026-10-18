@@ -8,7 +8,7 @@ $py = "python"
 if (Test-Path ".venv\Scripts\python.exe") { $py = ".venv\Scripts\python.exe" }
 
 & $py -m pip install -U pip wheel
-& $py -m pip install -r requirements.txt pyinstaller "PySide6-Essentials>=6.6.0"
+& $py -m pip install -r requirements.txt pyinstaller
 
 # ExifTool lives in-repo at Tools/exiftool and is bundled by the PyInstaller spec.
 $dest = Join-Path $Root "Tools\exiftool\exiftool.exe"

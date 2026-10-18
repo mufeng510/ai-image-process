@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
+from app.core.exiftool_runner import ExifToolRunner
 from app.core.ffmpeg_resolver import resolve_ffmpeg, resolve_ffprobe
 from app.core.live_photo.metadata import (
     build_apple_makernote,
@@ -18,10 +19,13 @@ from app.core.live_photo.validator import LivePhotoValidator
 
 needs_ffmpeg = pytest.mark.skipif(resolve_ffmpeg() is None, reason="ffmpeg not available")
 
+# ExifTool authors the pairing identifiers (Apple MakerNote ContentIdentifier,
+# MOV content.identifier); nothing else can, so bundles never validate without it.
+needs_exiftool = pytest.mark.skipif(
+    not ExifToolRunner().available(), reason="ExifTool binary not available")
+
 
 def _has_tools() -> bool:
-    from app.core.exiftool_runner import ExifToolRunner
-
     return resolve_ffmpeg() is not None and ExifToolRunner().available()
 
 
@@ -158,6 +162,7 @@ def test_safe_request_rejects_non_http_and_strips_cross_host_auth(tmp_path):
 
 
 @needs_ffmpeg
+@needs_exiftool
 def test_local_motion_end_to_end(tmp_path):
     from app.core.live_photo.builder import LivePhotoBuilder
 

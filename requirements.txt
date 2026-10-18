@@ -1,5 +1,7 @@
 Pillow>=10.0.0
-PySide6-Essentials>=6.6.0
+# Upper bound: see pyproject.toml — 6.12.0 crashes at interpreter shutdown
+# after the offscreen GUI tests, taking `pytest -q` down with it.
+PySide6-Essentials>=6.6.0,<6.12
 pytest>=8.0.0
 packaging>=24.2  # powers the in-app wheel installer
 # Optional provenance cleanup (metadata mode):

@@ -5,8 +5,17 @@ import pytest
 from PIL import Image
 
 from app.config.schema import default_config
+from app.core.exiftool_runner import ExifToolRunner
 from app.core.pipeline import DEFAULT_STEP_ORDER, build_default_registry, run_job
 from app.core.ffmpeg_resolver import resolve_ffmpeg
+
+needs_ffmpeg = pytest.mark.skipif(resolve_ffmpeg() is None, reason="ffmpeg not available")
+
+# ExifTool authors the Live Photo pairing identifiers (photo MakerNote
+# ContentIdentifier + MOV content.identifier); the stage-1 validator fails the
+# bundle without them, so this combo needs a runnable ExifTool.
+needs_exiftool = pytest.mark.skipif(
+    not ExifToolRunner().available(), reason="ExifTool binary not available")
 
 
 def _img(p: Path, size=(160, 120), color=(30, 60, 90)):
@@ -60,7 +69,8 @@ def test_defaults_off_regression_matches_legacy(tmp_path):
     assert len(list(out.glob("*.jpg"))) == 1 and len(list(out.glob("*.mov"))) == 0
 
 
-@pytest.mark.skipif(resolve_ffmpeg() is None, reason="ffmpeg not available")
+@needs_ffmpeg
+@needs_exiftool
 def test_live_photo_bundle_atomic_and_shared_basename(tmp_path):
     cfg, src, out = _base_cfg(tmp_path)
     cfg.steps.device_metadata.enabled = False
