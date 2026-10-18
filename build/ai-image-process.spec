@@ -49,25 +49,47 @@ if _icon_file is None:
 # get a native perl script + lib/ fetched by scripts/fetch_exiftool.sh. Mixing
 # them wastes ~11 MB and, worse, means the app cannot find a usable ExifTool at
 # all on macOS/Linux — device EXIF then silently writes nothing.
+def _collect_tree(src: Path, dest: str) -> list[tuple[str, str]]:
+    """Map every FILE under `src` into `dest`, preserving the tree.
+
+    Two PyInstaller quirks bite here:
+      - a (dir, dest) entry copies the directory's *contents* into dest, so
+        passing `lib` flattens `lib/Image/ExifTool.pm`;
+      - a (file, dest) entry appends the file's basename to dest, so dest
+        must be the file's PARENT directory, never its full target path.
+    Walking files ourselves avoids both.
+    """
+    out = []
+    for path in sorted(src.rglob("*")):
+        if not path.is_file():
+            continue
+        rel_dir = path.relative_to(src).parent.as_posix()
+        target = dest if rel_dir in ("", ".") else f"{dest}/{rel_dir}"
+        out.append((str(path), target))
+    return out
+
+
 exif_dir = repo / "Tools" / "exiftool"
+_datas_exif = []
 if sys.platform == "win32":
     # exiftool.exe + exiftool_files/ (the tracked Windows distribution)
-    _exif_items = []
     if (exif_dir / "exiftool.exe").is_file():
-        _exif_items.append(str(exif_dir / "exiftool.exe"))
+        _datas_exif.append((str(exif_dir / "exiftool.exe"), "Tools/exiftool"))
     if (exif_dir / "exiftool_files").is_dir():
-        _exif_items.append(str(exif_dir / "exiftool_files"))
+        _datas_exif.extend(_collect_tree(exif_dir / "exiftool_files",
+                                         "Tools/exiftool/exiftool_files"))
 else:
     # native perl script + lib/ fetched by scripts/fetch_exiftool.sh
-    _exif_items = []
     if (exif_dir / "exiftool").is_file():
-        _exif_items.append(str(exif_dir / "exiftool"))
+        _datas_exif.append((str(exif_dir / "exiftool"), "Tools/exiftool"))
     if (exif_dir / "lib").is_dir():
-        _exif_items.append(str(exif_dir / "lib"))
-if _exif_items:
-    # Per-file, not the whole directory: shipping both layouts would add ~11MB
-    # of unusable foreign binaries to every artifact.
-    datas.extend((item, "Tools/exiftool") for item in _exif_items)
+        # The perl script loads modules from ./lib/Image/..., so every level of
+        # that tree has to survive packaging.
+        _datas_exif.extend(_collect_tree(exif_dir / "lib", "Tools/exiftool/lib"))
+if _datas_exif:
+    # Per-file, not the whole directory: shipping both layouts would add
+    # ~11MB of unusable foreign binaries to every artifact.
+    datas.extend(_datas_exif)
 else:
     print("[spec] WARNING: no ExifTool for this platform; device EXIF and "
           "Live Photo will not work. Run scripts/fetch_exiftool.sh.")

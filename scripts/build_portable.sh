@@ -70,7 +70,7 @@ os_token: ${os_token}
 arch_token: ${arch_token}
 generated_by: scripts/build_portable.sh
 note: Unsigned portable build. macOS Gatekeeper / Windows SmartScreen may warn.
-note: Windows release CI may bundle Tools/exiftool; non-Windows ExifTool is best-effort.
+note: ExifTool and FFmpeg are bundled (platform-native ExifTool on unix, exiftool.exe on Windows).
 INFO
 
 archive="dist/AI-Image-Process-${os_token}-${arch_token}-portable.zip"
