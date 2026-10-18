@@ -23,11 +23,16 @@ def largest_axis_aligned_rect(w: int, h: int, angle_deg: float) -> tuple[int, in
 
     def fits(scale: float) -> bool:
         cw, ch = w * scale, h * scale
-        # corner (cw/2, ch/2) inverse-rotated; 2px margin absorbs canvas
-        # rounding + resampling bleed at extreme aspects.
+        # Extremes over ALL FOUR corners after inverse-rotating by -theta:
+        #   max|x'| = x*cos + y*sin
+        #   max|y'| = x*sin + y*cos
+        # The y term is sign-mixed: computing it as `-x*sin + y*cos` checks
+        # one arbitrary corner instead of the extreme, so on landscape images
+        # (w > h) the crop ran past the rotated canvas and left black edges.
+        # 2px margin absorbs canvas rounding + resampling bleed.
         x, y = cw / 2.0, ch / 2.0
         xr = x * cos_t + y * sin_t
-        yr = -x * sin_t + y * cos_t
+        yr = x * sin_t + y * cos_t
         return xr <= w / 2.0 - 2.0 + 1e-9 and yr <= h / 2.0 - 2.0 + 1e-9
 
     lo, hi = 0.0, 1.0
@@ -47,9 +52,10 @@ def largest_axis_aligned_rect(w: int, h: int, angle_deg: float) -> tuple[int, in
 
 
 def _fits_rotated(cw: float, ch: float, w: float, h: float, sin_t: float, cos_t: float) -> bool:
-    # Kept for backwards-compat import; superseded by corner-based check.
+    # Kept for backwards-compat import; superseded by largest_axis_aligned_rect.
+    # Same corner-extreme rule there: max|y'| = x*sin + y*cos.
     x, y = cw / 2.0, ch / 2.0
-    return (x * cos_t + y * sin_t) <= w / 2.0 + 1e-6 and (-x * sin_t + y * cos_t) <= h / 2.0 + 1e-6
+    return (x * cos_t + y * sin_t) <= w / 2.0 + 1e-6 and (x * sin_t + y * cos_t) <= h / 2.0 + 1e-6
 
 
 class RotateCropStep(Step):
