@@ -174,6 +174,12 @@ class SettingsDialog(QDialog):
         form.addRow(self.chk_preserve)
         self.chk_use_source = QCheckBox("默认输出到原图所在目录")
         form.addRow(self.chk_use_source)
+        self.chk_subfolder = QCheckBox(
+            "每次任务在输出目录下新建时间戳文件夹（如 20261018-143052）")
+        self.chk_subfolder.setToolTip(
+            "开启后每次处理都会新建一个带时间的子文件夹，多次处理不会互相覆盖。\n"
+            "关闭则直接输出到你指定的目录。")
+        form.addRow(self.chk_subfolder)
         layout.addWidget(out_box)
 
         name_box = QGroupBox("文件命名")
@@ -884,6 +890,7 @@ class SettingsDialog(QDialog):
         self.chk_auto_create.setChecked(cfg.output.auto_create_directory)
         self.chk_preserve.setChecked(cfg.output.preserve_originals)
         self.chk_use_source.setChecked(cfg.output.use_source_directory)
+        self.chk_subfolder.setChecked(cfg.output.subfolder_per_run)
 
         preset_key = cfg.naming.preset or "custom"
         pidx = self.preset.findData(preset_key)
@@ -984,6 +991,7 @@ class SettingsDialog(QDialog):
         cfg.output.auto_create_directory = self.chk_auto_create.isChecked()
         cfg.output.preserve_originals = self.chk_preserve.isChecked()
         cfg.output.use_source_directory = self.chk_use_source.isChecked()
+        cfg.output.subfolder_per_run = self.chk_subfolder.isChecked()
         cfg.output.conflict_policy = str(self.conflict.currentData() or "rename")
 
         preset = str(self.preset.currentData() or "custom")

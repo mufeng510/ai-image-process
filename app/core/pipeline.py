@@ -131,13 +131,20 @@ def run_job(
 
     # resolve output dir
     if output_dir is not None:
-        out = Path(output_dir)
+        out_root = Path(output_dir)
     elif config.output.use_source_directory and records:
-        out = records[0].source_path.parent
+        out_root = records[0].source_path.parent
     elif config.output.directory:
-        out = Path(config.output.directory)
+        out_root = Path(config.output.directory)
     else:
-        out = Path.cwd() / "output"
+        out_root = Path.cwd() / "output"
+
+    # Each job publishes into its own timestamped sub-folder so repeated runs
+    # never mix into one directory. Resolution is pure (creates nothing) so a
+    # preflight failure still leaves no trace; output_write does the mkdir.
+    from app.core.output_paths import resolve_run_folder
+
+    out = resolve_run_folder(out_root, per_run=config.output.subfolder_per_run)
 
     rng = random.Random(seed)
 
@@ -175,6 +182,9 @@ def run_job(
     resources = {
         "rng": rng,
         "output_dir": out,
+        # The directory the user picked; `output_dir` is the per-run leaf
+        # inside it when output.subfolder_per_run is on.
+        "output_root": out_root,
         "icc_path": icc_profile_path(),
         "device_library": DeviceLibrary.load(phones_json_path()) if phones_json_path().exists() else None,
         "exiftool": ExifToolRunner(),

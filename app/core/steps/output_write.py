@@ -41,10 +41,18 @@ class OutputWriteStep(Step):
     def run(self, ctx: StepContext) -> StepResult:
         try:
             out_dir = Path(ctx.resources["output_dir"]).expanduser().resolve()
-            if ctx.config.output.auto_create_directory:
-                out_dir.mkdir(parents=True, exist_ok=True)
-            elif not out_dir.exists():
-                return StepResult(self.id, False, error=f"output directory missing: {out_dir}")
+            root_raw = ctx.resources.get("output_root")
+            root = Path(root_raw).expanduser().resolve() if root_raw else out_dir
+            # auto_create_directory governs the directory the user chose. When
+            # a per-run sub-folder is used, the timestamped leaf below it is
+            # ours to create either way — it never pre-exists by design.
+            auto_create = ctx.config.output.auto_create_directory
+            if not root.exists():
+                if not auto_create:
+                    return StepResult(self.id, False,
+                                     error=f"output directory missing: {root}")
+                root.mkdir(parents=True, exist_ok=True)
+            out_dir.mkdir(parents=True, exist_ok=True)
 
             policy = ConflictPolicy(ctx.config.output.conflict_policy)
             bundle = getattr(ctx.record, "live_photo_bundle", None)

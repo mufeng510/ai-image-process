@@ -28,6 +28,9 @@ def _base_cfg(tmp_path, lib=None):
     cfg = default_config()
     cfg.steps.provenance_cleanup.enabled = False
     cfg.steps.visible_watermark.enabled = False
+    # These tests assert on flat output paths; the per-run timestamped folder
+    # has its own coverage in tests/core/test_output_paths.py.
+    cfg.output.subfolder_per_run = False
     cfg.paths.temp_dir = str(tmp_path / "tmp")
     return cfg, src, out
 

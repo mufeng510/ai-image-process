@@ -64,6 +64,7 @@ def test_metadata_survives_rotate_and_hidden(tmp_path):
     cfg.steps.rotate_crop.max_angle = 1.0
     cfg.steps.hidden_image.enabled = True
     cfg.steps.hidden_image.library_dir = str(lib)
+    cfg.output.subfolder_per_run = False  # see tests/core/test_output_paths.py
     cfg.paths.temp_dir = str(tmp_path / "tmp")
     r = run_job(cfg, [src], output_dir=out, seed=11, temp_base=tmp_path / "tmp")
     assert r.failure_count == 0

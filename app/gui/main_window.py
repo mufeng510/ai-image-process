@@ -55,6 +55,7 @@ class MainWindow(QMainWindow):
         ensure_runtime_site(self._config.runtime.portable_mode)
 
         self._inputs: list[Path] = []
+        self._last_output_dir: Path | None = None
         self._controller = PipelineController(self)
         self._controller.progress.connect(self._on_progress)
         self._controller.finished.connect(self._on_finished)
@@ -442,6 +443,19 @@ class MainWindow(QMainWindow):
     def _on_finished(self, result: object) -> None:
         if not isinstance(result, JobResult):
             return
+        # Tell the user where the run actually landed: with a per-run
+        # timestamped folder the effective directory differs from the one
+        # they picked, and finding it by hand is the first thing people do.
+        out_dir = None
+        for f in result.success:
+            p = getattr(f, "output_path", None)
+            if p is not None:
+                out_dir = Path(p).parent
+                break
+        if out_dir is not None:
+            self._last_output_dir = out_dir
+            self.out_edit.setText(str(out_dir))
+            self._append_log(f"[输出] 本次结果目录：{out_dir}")
         if getattr(result, "preflight_failed", False):
             text = f"预检未通过，任务未开始。\n\n{result.preflight_error or ''}"
             self.lbl_status.setText("预检未通过")

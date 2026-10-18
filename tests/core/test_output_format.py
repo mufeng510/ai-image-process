@@ -101,7 +101,12 @@ def _mixed_inputs(d: Path) -> None:
 
 
 def _run(cfg, src, out, tmp_path):
-    """run_job with the job's temp base pinned inside tmp_path, as tests do."""
+    """run_job with the job's temp base pinned inside tmp_path, as tests do.
+
+    Output stays flat: these tests are about file *format*, and the per-run
+    timestamped folder is covered by tests/core/test_output_paths.py.
+    """
+    cfg.output.subfolder_per_run = False
     cfg.paths.temp_dir = str(tmp_path / "tmp")
     return run_job(cfg, [src], output_dir=out, seed=1, temp_base=tmp_path / "tmp")
 

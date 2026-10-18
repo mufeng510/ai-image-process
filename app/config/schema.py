@@ -25,6 +25,10 @@ class OutputConfig:
     directory: str = ""
     use_source_directory: bool = False
     auto_create_directory: bool = True
+    # When true, every job publishes into a fresh timestamped sub-folder of
+    # `directory` (e.g. 20261018-143052) instead of writing straight into it,
+    # so repeated runs never mix or overwrite each other.
+    subfolder_per_run: bool = True
     conflict_policy: str = "rename"  # overwrite|skip|rename
     preserve_originals: bool = True
     allow_overwrite_originals: bool = False

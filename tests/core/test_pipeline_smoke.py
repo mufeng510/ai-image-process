@@ -17,6 +17,7 @@ def test_pipeline_smoke(tmp_path: Path):
     cfg.steps.provenance_cleanup.enabled = False  # optional dep
     cfg.steps.device_metadata.enabled = False  # may lack exiftool on linux CI
     cfg.runtime.cleanup_temp_on_success = True
+    cfg.output.subfolder_per_run = False  # see tests/core/test_output_paths.py
     cfg.paths.temp_dir = str(tmp_path / "tmp")
 
     result = run_job(cfg, [src], output_dir=out, seed=42, temp_base=tmp_path / "tmp")
