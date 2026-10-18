@@ -240,6 +240,9 @@ def migrate_config(data: dict[str, Any]) -> dict[str, Any]:
         data["config_version"] = 1
     steps = data.setdefault("steps", {})
     # v2: new steps default OFF so upgrades never change existing behavior.
+    # Deliberate exception: output.subfolder_per_run ships ON (users asked for
+    # it), so upgraded configs also start writing into a timestamped folder.
+    # The README calls that out; the settings checkbox turns it back off.
     if version < 2:
         steps.setdefault("rotate_crop", {"enabled": False, "min_angle": -2.0, "max_angle": 2.0})
         steps.setdefault("hidden_image", {"enabled": False, "library_dir": "", "opacity": 0.02})

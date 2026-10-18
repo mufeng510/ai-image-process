@@ -454,8 +454,10 @@ class MainWindow(QMainWindow):
                 break
         if out_dir is not None:
             self._last_output_dir = out_dir
-            self.out_edit.setText(str(out_dir))
             self._append_log(f"[输出] 本次结果目录：{out_dir}")
+        # Deliberately NOT written back into out_edit: that field is the input
+        # for the *next* run, and filling it with this run's timestamped folder
+        # would make every subsequent run nest one level deeper.
         if getattr(result, "preflight_failed", False):
             text = f"预检未通过，任务未开始。\n\n{result.preflight_error or ''}"
             self.lbl_status.setText("预检未通过")
@@ -469,17 +471,23 @@ class MainWindow(QMainWindow):
             return
         self.progress.setValue(100)
         text = f"完成。成功 {result.success_count}，失败 {result.failure_count}"
+        if out_dir is not None:
+            # Surface the real destination: with the per-run folder on it is
+            # not simply the directory the user typed.
+            text += f"\n结果目录：{out_dir}"
         self.lbl_status.setText(text)
         self._append_log(text)
+        where = f"\n\n结果目录：{out_dir}" if out_dir is not None else ""
         if result.failed:
             details = "\n".join(f"- {r.source_path.name}: {r.error}" for r in result.failed[:20])
             QMessageBox.warning(
                 self,
                 "处理完成（有失败）",
-                f"成功 {result.success_count}，失败 {result.failure_count}\n\n{details}",
+                f"成功 {result.success_count}，失败 {result.failure_count}{where}\n\n{details}",
             )
         else:
-            QMessageBox.information(self, "处理完成", f"全部成功：{result.success_count} 张")
+            QMessageBox.information(
+                self, "处理完成", f"全部成功：{result.success_count} 张{where}")
 
     @Slot(str)
     def _on_failed(self, message: str) -> None:

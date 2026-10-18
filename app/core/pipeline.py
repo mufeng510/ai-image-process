@@ -12,6 +12,7 @@ from app.core.device_library import DeviceLibrary
 from app.core.errors import to_user_message
 from app.core.exiftool_runner import ExifToolRunner
 from app.core.hidden_images import delete_hidden_image
+from app.core.output_paths import resolve_run_folder
 from app.core.models import (
     CancelToken,
     FileResult,
@@ -141,10 +142,22 @@ def run_job(
 
     # Each job publishes into its own timestamped sub-folder so repeated runs
     # never mix into one directory. Resolution is pure (creates nothing) so a
-    # preflight failure still leaves no trace; output_write does the mkdir.
-    from app.core.output_paths import resolve_run_folder
-
-    out = resolve_run_folder(out_root, per_run=config.output.subfolder_per_run)
+    # preflight failure still leaves no trace.
+    try:
+        out = resolve_run_folder(out_root, per_run=config.output.subfolder_per_run)
+    except RuntimeError as exc:
+        # Structured failure like every other preflight-style refusal, so the
+        # CLI reports it instead of raising a traceback.
+        result.preflight_failed = True
+        result.preflight_error = to_user_message(exc)
+        emit(ProgressKind.LOG, message=f"[Preflight] FAILED: {result.preflight_error}")
+        emit(ProgressKind.JOB_FINISHED, message="preflight failed")
+        if config.runtime.cleanup_temp_on_success:
+            try:
+                temp_mgr.cleanup_job(workspace)
+            except Exception:
+                pass
+        return result
 
     rng = random.Random(seed)
 
@@ -178,6 +191,42 @@ def run_job(
             rec.assigned_hidden_image = hpath
             rec.hidden_metadata_source = dict(preflight.hidden_metadata.get(str(rec.source_path), {}) or {})
     emit(ProgressKind.LOG, message="[Preflight] OK")
+
+    # Claim the run folder now that we know the job will run. Creating it
+    # atomically (exist_ok=False) closes the window where two processes started
+    # in the same second both resolve the same name and then share a directory.
+    # Only for per-run folders: a directory the user chose must never be
+    # created on their behalf from here.
+    run_folder_ours = False
+    per_run_dir = config.output.subfolder_per_run and config.steps.output_write.enabled
+    # Respect auto_create_directory: when it is off and the directory the user
+    # chose does not exist, create nothing here and let output_write report the
+    # per-file error exactly as before.
+    root_ready = out_root.exists() or config.output.auto_create_directory
+    if per_run_dir and root_ready:
+        for _ in range(5):
+            try:
+                out.mkdir(parents=True, exist_ok=False)
+                run_folder_ours = True
+                break
+            except FileExistsError:
+                try:
+                    out = resolve_run_folder(out_root, per_run=True)
+                except RuntimeError as exc:
+                    result.preflight_failed = True
+                    result.preflight_error = to_user_message(exc)
+                    emit(ProgressKind.LOG,
+                         message=f"[Preflight] FAILED: {result.preflight_error}")
+                    emit(ProgressKind.JOB_FINISHED, message="preflight failed")
+                    return result
+            except OSError:
+                # Not our business (permissions, read-only media): let
+                # output_write report it per file with the usual message.
+                break
+        else:
+            out = resolve_run_folder(out_root, per_run=True)
+        if run_folder_ours:
+            emit(ProgressKind.LOG, message=f"[输出] 本次结果目录：{out}")
 
     resources = {
         "rng": rng,
@@ -269,6 +318,15 @@ def run_job(
 
     if not result.cancelled:
         emit(ProgressKind.JOB_FINISHED, message="done", index=len(records))
+
+    # A run folder we created but never wrote into (every file rejected, or the
+    # job produced nothing) would otherwise linger as an empty directory.
+    if run_folder_ours:
+        try:
+            if out.is_dir() and not any(out.iterdir()):
+                out.rmdir()
+        except OSError:
+            pass
 
     # Guarantee: Live Photo OFF produces no .mov anywhere in outputs.
     # (Intermediate staging is under temp and cleaned below.)

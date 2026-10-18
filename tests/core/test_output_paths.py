@@ -192,3 +192,123 @@ def test_settings_dialog_subfolder_checkbox_roundtrip(monkeypatch):
     assert dlg._collect_ui_config().output.subfolder_per_run is False
     dlg.close()
     del app
+
+
+# --- regressions: a run folder that leaked, lingered, or was claimed twice ------
+
+
+def _isolated_config(monkeypatch, tmp_path):
+    """Point MainWindow at a throwaway config, never the user's real one."""
+    import app.gui.main_window as mw
+    from app.config.manager import ConfigManager
+
+    monkeypatch.setattr(
+        mw, "ConfigManager",
+        lambda *a, **k: ConfigManager(tmp_path / "test-config.json"),
+    )
+
+
+@pytest.fixture(scope="module")
+def qapp():
+    import os
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")  # must precede QApplication
+    pytest.importorskip("PySide6")
+    from PySide6.QtWidgets import QApplication
+    yield QApplication.instance() or QApplication([])
+
+
+def _finished_result(out_dir: Path):
+    """A successful JobResult as _on_finished sees it: one published output."""
+    from app.core.models import FileResult, JobResult
+    return JobResult(job_id="job-1", success=[FileResult(
+        source_path=Path("/tmp/whatever/in/x.jpg"), ok=True, output_path=out_dir / "x.jpg")])
+
+
+def test_finished_never_backfills_the_output_path_field(qapp, tmp_path, monkeypatch):
+    """out_edit is the *next* run's root: filling it with this run's leaf would
+    nest one level deeper per click, and closeEvent would persist the nesting."""
+    import app.gui.main_window as mw
+    from app.gui.main_window import MainWindow
+
+    monkeypatch.setattr(mw.QMessageBox, "information", lambda *a, **k: None)
+    _isolated_config(monkeypatch, tmp_path)
+    win, root = MainWindow(), tmp_path / "exports"
+    win.out_edit.setText(str(root))
+    win._on_finished(_finished_result(Path("/tmp/whatever/20261018-010101")))
+    assert win._last_output_dir == Path("/tmp/whatever/20261018-010101")  # the code ran
+    assert win.out_edit.text() == str(root)
+    win.deleteLater()
+
+
+def test_two_runs_leave_the_typed_output_root_untouched(qapp, tmp_path, monkeypatch):
+    """The stacking users actually saw: run, then run again without touching the
+    field — the text must still be exactly what they typed."""
+    import app.gui.main_window as mw
+    from app.gui.main_window import MainWindow
+
+    monkeypatch.setattr(mw.QMessageBox, "information", lambda *a, **k: None)
+    _isolated_config(monkeypatch, tmp_path)
+    win, root = MainWindow(), tmp_path / "exports"
+    win.out_edit.setText(str(root))
+    for stamp in ("20261018-010101", "20261018-020202"):
+        win._on_finished(_finished_result(Path(f"/tmp/whatever/{stamp}")))
+        assert win.out_edit.text() == str(root)
+    win.deleteLater()
+
+
+def test_run_folder_created_but_never_written_is_reclaimed(tmp_path):
+    """A placeholder this run made and never filled must not linger empty."""
+    src = tmp_path / "in"
+    src.mkdir()
+    Image.new("RGB", (64, 48), (200, 30, 30)).save(src / "fake.jpg", "PNG")
+    exports = tmp_path / "exports"
+    cfg = _config(tmp_path)
+    for step in (cfg.steps.reencode, cfg.steps.rotate_crop, cfg.steps.hidden_image):
+        step.enabled = False  # preflight reads the .jpg extension and lets it by
+    result = _run(cfg, src, exports, tmp_path)
+    assert result.preflight_failed is False  # output_write is what rejects it
+    assert (result.success_count, result.failure_count) == (0, 1)
+    assert "非 JPEG" in (result.failed[0].error or "")
+    assert exports.exists()  # the root the user picked stays...
+    assert not [p for p in exports.iterdir() if p.is_dir()]  # ...without an empty leaf
+
+
+def test_placeholder_creation_survives_another_job_taking_the_name(tmp_path, monkeypatch):
+    """mkdir(exist_ok=False) is the atomic claim: a concurrent job that wins the
+    window between resolving a name and creating it must push us to -2."""
+    monkeypatch.setattr(output_paths, "datetime", _FrozenClock)  # fixed stamp
+    src, exports = _inputs(tmp_path), tmp_path / "exports"
+    real, seen = output_paths.resolve_run_folder, []
+
+    def raced(root, *, when=None, per_run=True):
+        path = real(root, when=when, per_run=per_run)
+        seen.append(path)
+        if len(seen) == 1:  # "another process" grabs the name right here
+            path.mkdir(parents=True)
+            (path / "theirs.jpg").write_bytes(b"not-ours")
+        return path
+
+    from app.core import pipeline
+
+    monkeypatch.setattr(pipeline, "resolve_run_folder", raced)
+    result = _run(_config(tmp_path), src, exports, tmp_path)
+    assert result.success_count == 2
+    theirs, ours = exports / STAMP, exports / f"{STAMP}-2"
+    assert (theirs / "theirs.jpg").read_bytes() == b"not-ours"  # theirs, untouched
+    assert not (theirs / "photo0.jpg").exists()  # we did not share their folder
+    assert sorted(p.name for p in ours.glob("*.jpg")) == ["photo0.jpg", "photo1.jpg"]
+
+
+def test_unusable_run_folder_is_a_refusal_not_a_traceback(tmp_path, monkeypatch):
+    """Running out of suffix names is a structured preflight failure, and since
+    resolution runs before preflight it leaves nothing on disk."""
+    monkeypatch.setattr(output_paths, "datetime", _FrozenClock)
+    monkeypatch.setattr(output_paths, "MAX_SUFFIX_ATTEMPTS", 1)
+    src, exports = _inputs(tmp_path), tmp_path / "exports"
+    for name in (STAMP, f"{STAMP}-2"):
+        (exports / name).mkdir(parents=True)
+    before = sorted(p.name for p in exports.iterdir())
+    result = _run(_config(tmp_path), src, exports, tmp_path)
+    assert result.preflight_failed is True and result.preflight_error
+    assert (result.success_count, result.failure_count) == (0, 0)
+    assert sorted(p.name for p in exports.iterdir()) == before  # nothing added
