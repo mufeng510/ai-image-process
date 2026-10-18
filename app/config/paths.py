@@ -96,3 +96,9 @@ def exiftool_candidates() -> list[Path]:
     if sys.platform.startswith("win"):
         return windows + unix
     return unix + windows  # prefer native first; runner will validate executability
+
+
+# NOTE: ExifTool discovery moved to app.core.runtime_tools (bundled ->
+# runtime-installed -> PATH, with unix exec-bit self-heal). The helper above is
+# kept only for external callers; the app itself resolves tools through
+# runtime_tools so the GUI status panel and the pipeline cannot disagree.

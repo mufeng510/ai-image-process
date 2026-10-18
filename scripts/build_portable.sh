@@ -12,8 +12,8 @@ fi
 echo "[build] python=$PYTHON"
 "$PYTHON" -m pip install -U pip wheel
 "$PYTHON" -m pip install -r requirements.txt pyinstaller
-# GUI extra
-"$PYTHON" -m pip install "PySide6-Essentials>=6.6.0" || "$PYTHON" -m pip install "PySide6>=6.6.0"
+# GUI extra (upper bound mirrors requirements.txt: 6.12.0 crashes at shutdown)
+"$PYTHON" -m pip install "PySide6-Essentials>=6.6.0,<6.12" || "$PYTHON" -m pip install "PySide6>=6.6.0,<6.12"
 
 # Optional provenance package (can bloat; leave commented by default)
 # "$PYTHON" -m pip install "remove-ai-watermarks>=0.26.0"
@@ -25,6 +25,16 @@ test -x "$ROOT/Tools/ffmpeg/ffmpeg" || {
   echo "[build] Tools/ffmpeg/ffmpeg missing after fetch; refusing to package without FFmpeg" >&2
   exit 1
 }
+
+# ExifTool is required for device EXIF and Live Photo pairing. On unix the
+# repo only ships the Windows distribution, so fetch the native one.
+if [[ "$(uname -s)" != MINGW* && "$(uname -s)" != MSYS* && "$(uname -s)" != CYGWIN* && "$(uname -s)" != Windows* ]]; then
+  bash "$ROOT/scripts/fetch_exiftool.sh"
+  test -x "$ROOT/Tools/exiftool/exiftool" || {
+    echo "[build] Tools/exiftool/exiftool missing after fetch; refusing to package without ExifTool" >&2
+    exit 1
+  }
+fi
 
 rm -rf build/pyinstaller dist/AI-Image-Process
 "$PYTHON" -m PyInstaller --noconfirm --clean --distpath dist --workpath build/pyinstaller \

@@ -119,6 +119,9 @@ jobs:
           test -f "$target"
           # Live Photo headline feature: the portable zip must bundle FFmpeg.
           python3 -c "import zipfile; n=zipfile.ZipFile('$target').namelist(); assert any('Tools/ffmpeg/ffmpeg' in x for x in n), 'ffmpeg missing in portable zip'; print('ffmpeg bundled ok')"
+          # Device EXIF + Live Photo pairing need a native ExifTool: the
+          # Windows distribution in the repo is unusable here.
+          python3 -c "import zipfile; n=zipfile.ZipFile('$target').namelist(); assert any(x.endswith('Tools/exiftool/exiftool') for x in n), 'native exiftool missing in portable zip'; assert any('Tools/exiftool/lib/' in x for x in n), 'exiftool lib missing in portable zip'; print('exiftool bundled ok')"
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
@@ -157,6 +160,8 @@ jobs:
           test -f "$primary"
           # Live Photo headline feature: the portable zip must bundle FFmpeg.
           python3 -c "import zipfile; n=zipfile.ZipFile('$primary').namelist(); assert any('Tools/ffmpeg/ffmpeg' in x for x in n), 'ffmpeg missing in portable zip'; print('ffmpeg bundled ok')"
+          # Device EXIF + Live Photo pairing need a native ExifTool (perl).
+          python3 -c "import zipfile; n=zipfile.ZipFile('$primary').namelist(); assert any(x.endswith('Tools/exiftool/exiftool') for x in n), 'native exiftool missing in portable zip'; assert any('Tools/exiftool/lib/' in x for x in n), 'exiftool lib missing in portable zip'; print('exiftool bundled ok')"
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4

@@ -147,7 +147,15 @@ class MainWindow(QMainWindow):
         steps_layout.addLayout(hidden_row)
         self.lbl_hidden_count = QLabel("可用图片：-")
         steps_layout.addWidget(self.lbl_hidden_count)
+        self.lbl_runtime = QLabel()
+        self.lbl_runtime.setWordWrap(True)
+        self.lbl_runtime.setStyleSheet("color:#c53030;font-size:11px;")
+        self.lbl_runtime.setVisible(False)
+        steps_layout.addWidget(self.lbl_runtime)
         self.hidden_edit.textChanged.connect(lambda _t: self._refresh_hidden_count())
+        # Enabling device EXIF / Live Photo changes which runtimes matter.
+        self.chk_device.toggled.connect(lambda _t: self._refresh_runtime_warning())
+        self.chk_live.toggled.connect(lambda _t: self._refresh_runtime_warning())
         root.addWidget(steps_box)
 
         action = QHBoxLayout()
@@ -211,7 +219,32 @@ class MainWindow(QMainWindow):
         self.chk_live.setChecked(self._config.steps.live_photo.enabled)
         self.hidden_edit.setText(self._config.steps.hidden_image.library_dir or "")
         self._refresh_hidden_count()
+        self._refresh_runtime_warning()
         self.chk_output.setChecked(self._config.steps.output_write.enabled)
+
+    def _refresh_runtime_warning(self) -> None:
+        """Warn about missing external runtimes before a job is started.
+
+        Without this the only signal was a silently skipped device-EXIF step
+        or a per-file Live Photo failure naming an identifier the user has
+        never heard of.
+        """
+        from app.core.runtime_tools import runtime_summary
+
+        # Availability only: probing versions spawns subprocesses (a perl
+        # ExifTool start-up is ~200ms), and this runs while toggling checkboxes.
+        tools = runtime_summary()
+        missing = []
+        if self.chk_device.isChecked() and not tools["exiftool"].available:
+            missing.append("ExifTool（写入设备 Metadata）")
+        if self.chk_live.isChecked() and not tools["ffmpeg"].available:
+            missing.append("FFmpeg（Live Photo）")
+        if missing:
+            self.lbl_runtime.setText("⚠ 缺少运行时：" + "、".join(missing)
+                                     + "；相关功能无法正常工作，请查看「设置 → 处理 → 外部运行时」。")
+            self.lbl_runtime.setVisible(True)
+        else:
+            self.lbl_runtime.setVisible(False)
 
     def _ui_to_config(self) -> AppConfig:
         cfg = self._config

@@ -23,3 +23,9 @@ Tools/ffmpeg/ffmpeg.exe
 Tools/ffmpeg/ffprobe.exe
 Tools/ffmpeg/ffmpeg
 Tools/ffmpeg/ffprobe
+# Native (unix) ExifTool is fetched by scripts/fetch_exiftool.sh, never
+# committed. The Windows distribution (exiftool.exe + exiftool_files/) IS
+# tracked, so Windows builds need no fetch step.
+Tools/exiftool/exiftool
+Tools/exiftool/lib/
+Tools/exiftool/SOURCE-UNIX.txt

@@ -1,12 +1,10 @@
-"""Bundled ExifTool runner."""
+"""ExifTool runner (bundled, runtime-installed, or system PATH)."""
 from __future__ import annotations
 
-import os
 import subprocess
-import sys
 from pathlib import Path
 
-from app.config.paths import exiftool_candidates
+from app.core import runtime_tools
 from app.platform import CREATE_NO_WINDOW
 
 
@@ -16,19 +14,19 @@ class ExifToolRunner:
 
     @staticmethod
     def _looks_runnable(path: Path) -> bool:
-        if not path.exists() or not path.is_file():
-            return False
-        # Avoid executing Windows PE on Linux/macOS
-        if path.suffix.lower() == ".exe" and not sys.platform.startswith("win"):
-            return False
-        return os.access(path, os.X_OK) or path.suffix.lower() == ".exe"
+        # Same rule as runtime_tools._looks_runnable (also self-heals the exec
+        # bit), so a binary discovered earlier stays valid if permissions
+        # change under us.
+        return runtime_tools._looks_runnable(path)
 
     @classmethod
     def _discover(cls) -> Path | None:
-        for c in exiftool_candidates():
-            if cls._looks_runnable(c):
-                return c
-        return None
+        # Runtime discovery covers bundled -> runtime-installed -> system PATH,
+        # and repairs a missing exec bit on unix. See app.core.runtime_tools:
+        # the previous Tools-only lookup meant ExifTool could never be found
+        # outside Windows, so device EXIF silently wrote nothing.
+        status = runtime_tools.exiftool_status()
+        return status.path
 
     def available(self) -> bool:
         return self.binary is not None and self._looks_runnable(self.binary)

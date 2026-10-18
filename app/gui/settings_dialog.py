@@ -225,6 +225,28 @@ class SettingsDialog(QDialog):
         page = QWidget()
         layout = QVBoxLayout(page)
 
+        # External runtimes (ExifTool / FFmpeg). Shown first because a missing
+        # one silently disables device EXIF and breaks every Live Photo, and
+        # nothing else in this dialog would tell the user.
+        rt_box = QGroupBox("外部运行时")
+        rtf = QFormLayout(rt_box)
+        self.lbl_runtime_exiftool = QLabel()
+        self.lbl_runtime_ffmpeg = QLabel()
+        self.lbl_runtime_ffprobe = QLabel()
+        for lbl in (self.lbl_runtime_exiftool, self.lbl_runtime_ffmpeg,
+                    self.lbl_runtime_ffprobe):
+            lbl.setWordWrap(True)
+            lbl.setStyleSheet("font-size:11px;")
+        rtf.addRow("ExifTool", self.lbl_runtime_exiftool)
+        rtf.addRow("FFmpeg", self.lbl_runtime_ffmpeg)
+        rtf.addRow("ffprobe", self.lbl_runtime_ffprobe)
+        hint = QLabel("ExifTool 用于写入设备信息与 Live Photo 配对标识；FFmpeg 用于生成 Live Photo 动态。"
+                      "正式安装包已内置；此处显示缺失时，请安装对应工具后重启软件。")
+        hint.setWordWrap(True)
+        hint.setStyleSheet("color:#666;font-size:11px;")
+        rtf.addRow(hint)
+        layout.addWidget(rt_box)
+
         # Deduplication
         dedup = QGroupBox("文件去重")
         dpf = QFormLayout(dedup)
@@ -631,6 +653,28 @@ class SettingsDialog(QDialog):
     def _refresh_dependency_status(self) -> None:
         self._refresh_prov_status()
         self._refresh_visible_status()
+        self._refresh_runtime_status()
+
+    def _refresh_runtime_status(self) -> None:
+        """Show whether ExifTool / FFmpeg / ffprobe are actually usable."""
+        from app.core.runtime_tools import exiftool_status, ffmpeg_status, ffprobe_status
+
+        for label, status, missing_hint in (
+            (self.lbl_runtime_exiftool, exiftool_status(),
+             "未找到 — 设备 Metadata 与 Live Photo 将无法写入"),
+            (self.lbl_runtime_ffmpeg, ffmpeg_status(),
+             "未找到 — Live Photo 本地动态与 AI 视频不可用"),
+            (self.lbl_runtime_ffprobe, ffprobe_status(),
+             "未找到 — 将使用内置校验（功能不受影响）"),
+        ):
+            if status.available:
+                label.setText(f"✓ {status.display()}")
+                label.setStyleSheet("color:#2f855a;font-size:11px;")
+                label.setToolTip(str(status.path or ""))
+            else:
+                label.setText(f"✗ {missing_hint}")
+                label.setStyleSheet("color:#c53030;font-size:11px;")
+                label.setToolTip("")
 
     # ----- in-app dependency installation -----
     def _install_status_label(self, feature: str) -> QLabel:

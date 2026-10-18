@@ -102,6 +102,27 @@ def run_preflight(
     hidden_on = bool(config.steps.hidden_image.enabled)
     live_on = bool(config.steps.live_photo.enabled)
 
+    # 1b. Output format guarantee: without a JPEG-producing step the source
+    # bytes are published verbatim, so a TIFF/PNG input would land in a file
+    # named *.jpg. Refuse up front rather than emit mislabeled output.
+    if config.steps.output_write.enabled and records:
+        from app.core.output_format import non_jpeg_records
+
+        stuck = non_jpeg_records(records, config)
+        if stuck:
+            names = "、".join(p.name for p in stuck[:5])
+            more = f" 等共 {len(stuck)} 个" if len(stuck) > 5 else ""
+            return PreflightResult(
+                ok=False,
+                error=(
+                    "本次产物要求为 JPG，但「图片重编码」「图片旋转与裁剪」「隐藏图片」"
+                    "均未启用，非 JPG 输入会原样写入，无法保证格式。\n\n"
+                    f"受影响：{names}{more}\n\n"
+                    "请启用「图片重编码」（或其他会重新编码的步骤）后重试。"
+                ),
+                extra={"non_jpeg": [str(p) for p in stuck]},
+            )
+
     # 2. basenames right after dedup (records already deduped by caller)
     try:
         basenames = _compute_basenames(config, records)

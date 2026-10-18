@@ -44,9 +44,33 @@ if _icon_file is None:
     if _ico.is_file():
         _icon_file = str(_ico)
 
+# ExifTool: ship only the distribution that matches the target platform.
+# The repo tracks the Windows one (exiftool.exe + exiftool_files/); unix builds
+# get a native perl script + lib/ fetched by scripts/fetch_exiftool.sh. Mixing
+# them wastes ~11 MB and, worse, means the app cannot find a usable ExifTool at
+# all on macOS/Linux — device EXIF then silently writes nothing.
 exif_dir = repo / "Tools" / "exiftool"
-if exif_dir.exists():
-    datas.append((str(exif_dir), "Tools/exiftool"))
+if sys.platform == "win32":
+    # exiftool.exe + exiftool_files/ (the tracked Windows distribution)
+    _exif_items = []
+    if (exif_dir / "exiftool.exe").is_file():
+        _exif_items.append(str(exif_dir / "exiftool.exe"))
+    if (exif_dir / "exiftool_files").is_dir():
+        _exif_items.append(str(exif_dir / "exiftool_files"))
+else:
+    # native perl script + lib/ fetched by scripts/fetch_exiftool.sh
+    _exif_items = []
+    if (exif_dir / "exiftool").is_file():
+        _exif_items.append(str(exif_dir / "exiftool"))
+    if (exif_dir / "lib").is_dir():
+        _exif_items.append(str(exif_dir / "lib"))
+if _exif_items:
+    # Per-file, not the whole directory: shipping both layouts would add ~11MB
+    # of unusable foreign binaries to every artifact.
+    datas.extend((item, "Tools/exiftool") for item in _exif_items)
+else:
+    print("[spec] WARNING: no ExifTool for this platform; device EXIF and "
+          "Live Photo will not work. Run scripts/fetch_exiftool.sh.")
 
 # Optional FFmpeg for Live Photo local motion (see build/README.md for
 # licensing notes). Best-effort: packaging must not fail when absent.

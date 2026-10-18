@@ -68,6 +68,18 @@ class OutputWriteStep(Step):
                 # No half-committed bundle may remain on failure. Rollback only
                 # removes files this run created (pre-existing user files under
                 # overwrite policy are never unlinked by rollback).
+                # Same format invariant as the single-file path: the bundle
+                # still is whatever the pipeline produced, and live_photo only
+                # renames it to .jpg without re-encoding.
+                from app.core.output_format import is_jpeg_file
+
+                if not is_jpeg_file(bundle.photo_path):
+                    return StepResult(
+                        self.id, False,
+                        error=(f"拒绝输出非 JPEG 内容：{bundle.photo_path.name} "
+                               "不是 JPEG 文件，却要作为 Live Photo 静态图写入。"
+                               "请启用「图片重编码」以保证产物格式。"))
+
                 import uuid as _uuid
 
                 tag = _uuid.uuid4().hex[:8]
@@ -116,6 +128,18 @@ class OutputWriteStep(Step):
                         return StepResult(self.id, False, error="refusing to overwrite source while preserve_originals=true")
                 except OSError:
                     pass
+
+            # Output format invariant: never publish non-JPEG bytes under a
+            # .jpg name. Preflight already refuses the reachable
+            # configurations; this catches anything that slips past it.
+            from app.core.output_format import is_jpeg_file
+
+            if not is_jpeg_file(ctx.record.current_path):
+                return StepResult(
+                    self.id, False,
+                    error=(f"拒绝输出非 JPEG 内容：{ctx.record.current_path.name} "
+                           "不是 JPEG 文件，却要写入 .jpg 名称。"
+                           "请启用「图片重编码」以保证产物格式。"))
 
             shutil.copy2(ctx.record.current_path, final)
             ctx.record.output_path = final

@@ -1,57 +1,26 @@
-"""FFmpeg/ffprobe runtime resolution (bundled first, never require user PATH)."""
+"""FFmpeg/ffprobe runtime resolution (bundled, runtime-installed, or PATH).
+
+Thin wrapper kept for call-site compatibility: all discovery now lives in
+app.core.runtime_tools so the GUI status panel and the pipeline can never
+disagree about whether FFmpeg is present.
+"""
 from __future__ import annotations
 
-import os
-import shutil
-import sys
 from pathlib import Path
 
-from app.config.paths import app_root, resource_path
+from app.core.runtime_tools import FFMPEG_DIR, find_tool, user_install_dir  # noqa: F401
 
 
-def _bundled_candidates(names: list[str]) -> list[Path]:
-    root = app_root()
-    cands: list[Path] = []
-    for name in names:
-        cands.append(root / "Tools" / "ffmpeg" / name)
-        cands.append(resource_path("Tools", "ffmpeg", name))
-    meipass = getattr(sys, "_MEIPASS", None)
-    if meipass:
-        for name in names:
-            cands.append(Path(meipass) / "Tools" / "ffmpeg" / name)
-    return cands
-
-
-def _looks_runnable(p: Path) -> bool:
-    if not p.exists() or not p.is_file():
-        return False
-    # Portable zips may lose the unix exec bit; the file is ours (app-owned
-    # Tools dir), so restore it best-effort instead of reporting "missing".
-    if os.name != "nt" and not os.access(p, os.X_OK):
-        try:
-            mode = p.stat().st_mode | 0o755
-            os.chmod(p, mode)
-        except OSError:
-            pass
-    return os.access(p, os.X_OK) or p.suffix.lower() == ".exe"
+def _find(name: str) -> Path | None:
+    return find_tool(FFMPEG_DIR, name).path
 
 
 def resolve_ffmpeg() -> Path | None:
-    names = ["ffmpeg.exe", "ffmpeg"] if os.name == "nt" else ["ffmpeg", "ffmpeg.exe"]
-    for c in _bundled_candidates(names):
-        if _looks_runnable(c):
-            return c
-    found = shutil.which("ffmpeg")
-    return Path(found) if found else None
+    return _find("ffmpeg")
 
 
 def resolve_ffprobe() -> Path | None:
-    names = ["ffprobe.exe", "ffprobe"] if os.name == "nt" else ["ffprobe", "ffprobe.exe"]
-    for c in _bundled_candidates(names):
-        if _looks_runnable(c):
-            return c
-    found = shutil.which("ffprobe")
-    return Path(found) if found else None
+    return _find("ffprobe")
 
 
 def ffmpeg_available() -> bool:
