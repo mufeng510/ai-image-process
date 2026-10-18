@@ -69,6 +69,11 @@ jobs:
           }
           # Live Photo headline feature: the portable zip must bundle FFmpeg.
           python -c "import zipfile; n=zipfile.ZipFile('dist/AI-Image-Process-windows-x64-portable.zip').namelist(); assert any('Tools/ffmpeg/ffmpeg.exe' in x.replace(chr(92),'/') for x in n), 'ffmpeg missing in portable zip'; print('ffmpeg bundled ok')"
+          # ExifTool: exiftool.exe and exiftool_files/ must ship together at the
+          # SAME level (upstream requirement). PyInstaller's datas entries
+          # flatten directories, which silently breaks ExifTool while every
+          # prefix-based check keeps passing -- hence assert real file paths.
+          python -c "import zipfile; n=[x.replace(chr(92),'/') for x in zipfile.ZipFile('dist/AI-Image-Process-windows-x64-portable.zip').namelist()]; assert any(x.endswith('Tools/exiftool/exiftool.exe') for x in n), 'exiftool.exe missing in portable zip'; assert any(x.endswith('Tools/exiftool/exiftool_files/exiftool.pl') for x in n), 'exiftool_files/ flattened: perl modules unreachable'; assert any(x.endswith('Tools/exiftool/exiftool_files/lib/Image/ExifTool.pm') for x in n), 'exiftool_files/lib/Image/ExifTool.pm missing'; print('exiftool bundled ok')"
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
@@ -120,8 +125,12 @@ jobs:
           # Live Photo headline feature: the portable zip must bundle FFmpeg.
           python3 -c "import zipfile; n=zipfile.ZipFile('$target').namelist(); assert any('Tools/ffmpeg/ffmpeg' in x for x in n), 'ffmpeg missing in portable zip'; print('ffmpeg bundled ok')"
           # Device EXIF + Live Photo pairing need a native ExifTool: the
-          # Windows distribution in the repo is unusable here.
-          python3 -c "import zipfile; n=zipfile.ZipFile('$target').namelist(); assert any(x.endswith('Tools/exiftool/exiftool') for x in n), 'native exiftool missing in portable zip'; assert any('Tools/exiftool/lib/' in x for x in n), 'exiftool lib missing in portable zip'; print('exiftool bundled ok')"
+          # Windows distribution in the repo is unusable here. Assert the
+          # perl modules land at their real depth -- a prefix-only check for
+          # "Tools/exiftool/lib/" passes even when PyInstaller flattened the
+          # tree (lib/Image/ExifTool.pm -> lib/ExifTool.pm), which makes the
+          # bundled script silently fall back to a system ExifTool.
+          python3 -c "import zipfile; n=zipfile.ZipFile('$target').namelist(); assert any(x.endswith('Tools/exiftool/exiftool') for x in n), 'native exiftool missing in portable zip'; assert any(x.endswith('Tools/exiftool/lib/Image/ExifTool.pm') for x in n), 'exiftool lib layout wrong (expected Tools/exiftool/lib/Image/ExifTool.pm); perl modules unreachable'; print('exiftool bundled ok')"
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
@@ -161,7 +170,10 @@ jobs:
           # Live Photo headline feature: the portable zip must bundle FFmpeg.
           python3 -c "import zipfile; n=zipfile.ZipFile('$primary').namelist(); assert any('Tools/ffmpeg/ffmpeg' in x for x in n), 'ffmpeg missing in portable zip'; print('ffmpeg bundled ok')"
           # Device EXIF + Live Photo pairing need a native ExifTool (perl).
-          python3 -c "import zipfile; n=zipfile.ZipFile('$primary').namelist(); assert any(x.endswith('Tools/exiftool/exiftool') for x in n), 'native exiftool missing in portable zip'; assert any('Tools/exiftool/lib/' in x for x in n), 'exiftool lib missing in portable zip'; print('exiftool bundled ok')"
+          # Assert the modules at their real depth, not just the prefix: a
+          # flattened tree still contains "Tools/exiftool/lib/" entries while
+          # the perl script can no longer find them.
+          python3 -c "import zipfile; n=zipfile.ZipFile('$primary').namelist(); assert any(x.endswith('Tools/exiftool/exiftool') for x in n), 'native exiftool missing in portable zip'; assert any(x.endswith('Tools/exiftool/lib/Image/ExifTool.pm') for x in n), 'exiftool lib layout wrong (expected Tools/exiftool/lib/Image/ExifTool.pm); perl modules unreachable'; print('exiftool bundled ok')"
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
