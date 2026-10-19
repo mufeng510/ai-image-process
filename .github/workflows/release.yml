@@ -135,7 +135,7 @@ jobs:
           # "Tools/exiftool/lib/" passes even when PyInstaller flattened the
           # tree (lib/Image/ExifTool.pm -> lib/ExifTool.pm), which makes the
           # bundled script silently fall back to a system ExifTool.
-          python3 -c "import zipfile; n=zipfile.ZipFile('$target').namelist(); assert any(x.endswith('Tools/exiftool/exiftool') for x in n), 'native exiftool missing in portable zip'; assert any(x.endswith('Tools/exiftool/lib/Image/ExifTool.pm') for x in n), 'exiftool lib layout wrong (expected Tools/exiftool/lib/Image/ExifTool.pm); perl modules unreachable'; print('exiftool bundled ok')"
+          python3 -c "import zipfile; n=zipfile.ZipFile('$target').namelist(); assert any(x.endswith('Tools/exiftool/exiftool') for x in n), 'native exiftool missing in portable zip'; assert any(x.endswith('Tools/exiftool/exiftool.pl') for x in n), 'exiftool perl script missing'; assert any(x.endswith('Tools/exiftool/lib/Image/ExifTool.pm') for x in n), 'exiftool lib layout wrong (expected Tools/exiftool/lib/Image/ExifTool.pm); perl modules unreachable'; assert any(x.endswith('Tools/perl/bin/perl') for x in n), 'bundled perl missing: the unix ExifTool is a perl script and would fall back to whatever the host has'; print('exiftool bundled ok')"
           # Both entry points must ship: AI-Image-Process (GUI) and
           # AI-Image-Process-CLI (console). One EXE would make the artifact
           # GUI-only, and no script or agent could drive it.
@@ -182,7 +182,7 @@ jobs:
           # Assert the modules at their real depth, not just the prefix: a
           # flattened tree still contains "Tools/exiftool/lib/" entries while
           # the perl script can no longer find them.
-          python3 -c "import zipfile; n=zipfile.ZipFile('$primary').namelist(); assert any(x.endswith('Tools/exiftool/exiftool') for x in n), 'native exiftool missing in portable zip'; assert any(x.endswith('Tools/exiftool/lib/Image/ExifTool.pm') for x in n), 'exiftool lib layout wrong (expected Tools/exiftool/lib/Image/ExifTool.pm); perl modules unreachable'; print('exiftool bundled ok')"
+          python3 -c "import zipfile; n=zipfile.ZipFile('$primary').namelist(); assert any(x.endswith('Tools/exiftool/exiftool') for x in n), 'native exiftool missing in portable zip'; assert any(x.endswith('Tools/exiftool/exiftool.pl') for x in n), 'exiftool perl script missing'; assert any(x.endswith('Tools/exiftool/lib/Image/ExifTool.pm') for x in n), 'exiftool lib layout wrong (expected Tools/exiftool/lib/Image/ExifTool.pm); perl modules unreachable'; assert any(x.endswith('Tools/perl/bin/perl') for x in n), 'bundled perl missing: the unix ExifTool is a perl script and would fall back to whatever the host has'; print('exiftool bundled ok')"
           # Both entry points must ship: AI-Image-Process (GUI) and
           # AI-Image-Process-CLI (console). One EXE would make the artifact
           # GUI-only, and no script or agent could drive it.

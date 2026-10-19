@@ -8,8 +8,9 @@ Cross-platform **onedir portable** distribution built on official GitHub-hosted 
 dist/AI-Image-Process/
   AI-Image-Process(.exe)        # GUI entry (console=False)
   AI-Image-Process-CLI(.exe)    # CLI entry (console=True), same _internal
+  Tools/exiftool/               # unix: exiftool (sh wrapper) + exiftool.pl + lib/
+  Tools/perl/                   # unix: self-contained perl the wrapper execs
   assets/...
-  Tools/exiftool/...       # Windows when bundled
   LICENSE
   README.md
   BUILD_INFO.txt
@@ -21,6 +22,12 @@ branches on `argv[0]` instead — building a second Analysis would duplicate
 the whole dependency tree (ExifTool and FFmpeg included) for nothing. The
 CLI sibling needs `console=True`: a GUI-subsystem binary on Windows holds no
 console handle, so a parent shell cannot capture its stdout at all.
+
+`Tools/perl` is part of the product, not a host prerequisite: the unix ExifTool
+is a perl script, and without a bundled interpreter the wrapper falls back to
+whatever the host has — absent, every ExifTool probe reports unavailable and
+device EXIF is silently skipped. `scripts/fetch_perl.sh` fetches it and
+`build_portable.sh` refuses to package a unix build without it.
 
 Release artifacts (on tag `v*` or each `main` push):
 

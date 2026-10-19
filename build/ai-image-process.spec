@@ -83,9 +83,20 @@ if sys.platform == "win32":
         _datas_exif.extend(_collect_tree(exif_dir / "exiftool_files",
                                          "Tools/exiftool/exiftool_files"))
 else:
-    # native perl script + lib/ fetched by scripts/fetch_exiftool.sh
+    # fetch_exiftool.sh produces: exiftool (sh wrapper, execs Tools/perl/bin/perl
+    # or the host perl), exiftool.pl (the actual perl script) and lib/ (its
+    # modules). Shipping the wrapper without the script -- or the script without
+    # lib/ -- produces an artifact that looks fine in a namelist check and is
+    # dead on arrival at runtime, so assert the trio is really there.
     if (exif_dir / "exiftool").is_file():
         _datas_exif.append((str(exif_dir / "exiftool"), "Tools/exiftool"))
+    if (exif_dir / "exiftool.pl").is_file():
+        _datas_exif.append((str(exif_dir / "exiftool.pl"), "Tools/exiftool"))
+    elif (exif_dir / "exiftool").is_file():
+        raise SystemExit(
+            "[spec] Tools/exiftool/exiftool exists but exiftool.pl does not; "
+            "re-run scripts/fetch_exiftool.sh"
+        )
     if (exif_dir / "lib").is_dir():
         # The perl script loads modules from ./lib/Image/..., so every level of
         # that tree has to survive packaging.
@@ -103,6 +114,22 @@ else:
 ffmpeg_dir = repo / "Tools" / "ffmpeg"
 if ffmpeg_dir.exists():
     datas.append((str(ffmpeg_dir), "Tools/ffmpeg"))
+
+# A unix ExifTool is a perl script, so the interpreter is part of the product,
+# not a host prerequisite. Tools/exiftool/exiftool is a sh wrapper that execs
+# Tools/perl/bin/perl; without this tree it silently falls back to the host's
+# perl and every artifact is at the mercy of whether the user has one.
+perl_dir = repo / "Tools" / "perl"
+if sys.platform != "win32" and (perl_dir / "bin" / "perl").is_file():
+    # datas, not binaries: PyInstaller preserves the executable bit for data
+    # entries, and the wrapper execs this by absolute path. Adding them to both
+    # would duplicate every file in the artifact.
+    _perl_files = _collect_tree(perl_dir, "Tools/perl")
+    datas.extend(_perl_files)
+    print(f"[spec] bundled {len(_perl_files)} perl files")
+elif sys.platform != "win32":
+    print("[spec] WARNING: Tools/perl missing (run scripts/fetch_perl.sh); "
+          "the unix build will need a host perl")
 
 hiddenimports = [
     "app",

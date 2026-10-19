@@ -27,13 +27,27 @@ test -x "$ROOT/Tools/ffmpeg/ffmpeg" || {
 }
 
 # ExifTool is required for device EXIF and Live Photo pairing. On unix the
-# repo only ships the Windows distribution, so fetch the native one.
+# repo only ships the Windows distribution, so fetch the native one -- and,
+# because that distribution is a perl script, the interpreter too: a host
+# without perl would otherwise pass every ExifTool probe we run at build time
+# and then fail at the user's machine with "asset identifier missing".
 if [[ "$(uname -s)" != MINGW* && "$(uname -s)" != MSYS* && "$(uname -s)" != CYGWIN* && "$(uname -s)" != Windows* ]]; then
+  bash "$ROOT/scripts/fetch_perl.sh"
+  test -x "$ROOT/Tools/perl/bin/perl" || {
+    echo "[build] Tools/perl/bin/perl missing after fetch; refusing to package without a bundled interpreter" >&2
+    exit 1
+  }
   bash "$ROOT/scripts/fetch_exiftool.sh"
   test -x "$ROOT/Tools/exiftool/exiftool" || {
     echo "[build] Tools/exiftool/exiftool missing after fetch; refusing to package without ExifTool" >&2
     exit 1
   }
+  # The wrapper prefers Tools/perl/bin/perl; prove that path end to end before
+  # shipping, with nothing on PATH to fall back to.
+  if ! env -i PATH=/nonexistent "$ROOT/Tools/exiftool/exiftool" -ver >/dev/null 2>&1; then
+    echo "[build] bundled ExifTool cannot run with an empty PATH; perl is not really bundled" >&2
+    exit 1
+  fi
 fi
 
 rm -rf build/pyinstaller dist/AI-Image-Process
@@ -70,7 +84,9 @@ os_token: ${os_token}
 arch_token: ${arch_token}
 generated_by: scripts/build_portable.sh
 note: Unsigned portable build. macOS Gatekeeper / Windows SmartScreen may warn.
-note: ExifTool and FFmpeg are bundled (platform-native ExifTool on unix, exiftool.exe on Windows).
+note: ExifTool and FFmpeg are bundled; on unix ExifTool is a perl script, so a
+note: self-contained perl ships alongside it (Tools/perl) and Tools/exiftool/exiftool is a
+note: wrapper that prefers it. No host perl required.
 INFO
 
 archive="dist/AI-Image-Process-${os_token}-${arch_token}-portable.zip"

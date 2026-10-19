@@ -27,5 +27,10 @@ Tools/ffmpeg/ffprobe
 # committed. The Windows distribution (exiftool.exe + exiftool_files/) IS
 # tracked, so Windows builds need no fetch step.
 Tools/exiftool/exiftool
+Tools/exiftool/exiftool.pl
 Tools/exiftool/lib/
 Tools/exiftool/SOURCE-UNIX.txt
+Tools/perl/bin/
+Tools/perl/lib/
+Tools/perl/share/
+Tools/perl/SOURCE.txt
