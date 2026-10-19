@@ -97,6 +97,26 @@ CLI 参数之外的配置（子目录递归 `input.recurse_folders`、并发 `ru
 AI Provider `steps.live_photo.ai_video.*`、命名模板、冲突策略等）走 `--config` JSON 覆盖，
 缺省字段沿用默认值。
 
+### 打包版
+
+解压后的便携包里有**两个**入口，共享同一份依赖：
+
+| 入口 | 用途 |
+| --- | --- |
+| `AI-Image-Process` | 图形界面（Windows 为 console 子系统，不占控制台） |
+| `AI-Image-Process-CLI` | 命令行，供脚本与自动化调用 |
+
+```bash
+./AI-Image-Process-CLI ./photos -o ./out --json-summary | jq '.outputs[].output'
+```
+
+Windows 上必须用 `-CLI` 这个入口：GUI 程序不持有控制台句柄，父级 shell
+抓不到它的 stdout。Linux/macOS 上两者行为一致。
+
+unix 版 ExifTool 是 perl 脚本，因此**系统需要 perl**（Windows 的
+`exiftool.exe` 是原生程序，无此要求）。缺少时状态面板会显示「未安装」，
+Live Photo 会在配对标识处失败。
+
 版本来源：`app/version.py` 为唯一真实来源（当前 **0.3.0**），`pyproject.toml` 已对齐；
 请勿以 README 缓存版本为准。
 

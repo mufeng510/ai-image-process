@@ -74,6 +74,11 @@ jobs:
           # flatten directories, which silently breaks ExifTool while every
           # prefix-based check keeps passing -- hence assert real file paths.
           python -c "import zipfile; n=[x.replace(chr(92),'/') for x in zipfile.ZipFile('dist/AI-Image-Process-windows-x64-portable.zip').namelist()]; assert any(x.endswith('Tools/exiftool/exiftool.exe') for x in n), 'exiftool.exe missing in portable zip'; assert any(x.endswith('Tools/exiftool/exiftool_files/exiftool.pl') for x in n), 'exiftool_files/ flattened: perl modules unreachable'; assert any(x.endswith('Tools/exiftool/exiftool_files/lib/Image/ExifTool.pm') for x in n), 'exiftool_files/lib/Image/ExifTool.pm missing'; print('exiftool bundled ok')"
+          # Both entry points must ship. The GUI one is console=False (no
+          # console handle on Windows, so its stdout is uncapturable), which is
+          # exactly why automation needs the -CLI sibling; losing either one
+          # silently halves what the artifact can do.
+          python -c "import zipfile; b={x.replace(chr(92),'/').rsplit('/',1)[-1] for x in zipfile.ZipFile('dist/AI-Image-Process-windows-x64-portable.zip').namelist()}; assert 'AI-Image-Process.exe' in b, 'GUI entry missing'; assert 'AI-Image-Process-CLI.exe' in b, 'CLI entry missing: packaged artifact is GUI-only, scripts and agents cannot drive it'; print('both entry points bundled ok')"
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
@@ -131,6 +136,10 @@ jobs:
           # tree (lib/Image/ExifTool.pm -> lib/ExifTool.pm), which makes the
           # bundled script silently fall back to a system ExifTool.
           python3 -c "import zipfile; n=zipfile.ZipFile('$target').namelist(); assert any(x.endswith('Tools/exiftool/exiftool') for x in n), 'native exiftool missing in portable zip'; assert any(x.endswith('Tools/exiftool/lib/Image/ExifTool.pm') for x in n), 'exiftool lib layout wrong (expected Tools/exiftool/lib/Image/ExifTool.pm); perl modules unreachable'; print('exiftool bundled ok')"
+          # Both entry points must ship: AI-Image-Process (GUI) and
+          # AI-Image-Process-CLI (console). One EXE would make the artifact
+          # GUI-only, and no script or agent could drive it.
+          python3 -c "import zipfile; b={x.rsplit('/',1)[-1] for x in zipfile.ZipFile('$target').namelist()}; assert 'AI-Image-Process' in b, 'GUI entry missing'; assert 'AI-Image-Process-CLI' in b, 'CLI entry missing: packaged artifact is GUI-only, scripts and agents cannot drive it'; print('both entry points bundled ok')"
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
@@ -174,6 +183,10 @@ jobs:
           # flattened tree still contains "Tools/exiftool/lib/" entries while
           # the perl script can no longer find them.
           python3 -c "import zipfile; n=zipfile.ZipFile('$primary').namelist(); assert any(x.endswith('Tools/exiftool/exiftool') for x in n), 'native exiftool missing in portable zip'; assert any(x.endswith('Tools/exiftool/lib/Image/ExifTool.pm') for x in n), 'exiftool lib layout wrong (expected Tools/exiftool/lib/Image/ExifTool.pm); perl modules unreachable'; print('exiftool bundled ok')"
+          # Both entry points must ship: AI-Image-Process (GUI) and
+          # AI-Image-Process-CLI (console). One EXE would make the artifact
+          # GUI-only, and no script or agent could drive it.
+          python3 -c "import zipfile; b={x.rsplit('/',1)[-1] for x in zipfile.ZipFile('$primary').namelist()}; assert 'AI-Image-Process' in b, 'GUI entry missing'; assert 'AI-Image-Process-CLI' in b, 'CLI entry missing: packaged artifact is GUI-only, scripts and agents cannot drive it'; print('both entry points bundled ok')"
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4

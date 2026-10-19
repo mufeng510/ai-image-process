@@ -6,13 +6,21 @@ Cross-platform **onedir portable** distribution built on official GitHub-hosted 
 
 ```text
 dist/AI-Image-Process/
-  AI-Image-Process(.exe)   # platform binary
+  AI-Image-Process(.exe)        # GUI entry (console=False)
+  AI-Image-Process-CLI(.exe)    # CLI entry (console=True), same _internal
   assets/...
   Tools/exiftool/...       # Windows when bundled
   LICENSE
   README.md
   BUILD_INFO.txt
 ```
+
+Two entries, one bundle. PyInstaller compiles a single entry script per
+Analysis and gives every EXE the same `a.scripts`, so `scripts/run_app.py`
+branches on `argv[0]` instead — building a second Analysis would duplicate
+the whole dependency tree (ExifTool and FFmpeg included) for nothing. The
+CLI sibling needs `console=True`: a GUI-subsystem binary on Windows holds no
+console handle, so a parent shell cannot capture its stdout at all.
 
 Release artifacts (on tag `v*` or each `main` push):
 

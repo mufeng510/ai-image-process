@@ -17,9 +17,13 @@ _spec_dir = Path(SPECPATH).resolve()
 if _spec_dir.is_file():
     _spec_dir = _spec_dir.parent
 repo = _spec_dir.parent
-run_gui = repo / "scripts" / "run_gui.py"
-if not run_gui.exists():
-    raise SystemExit(f"run_gui entry not found: {run_gui}")
+# One entry script, two personalities. PyInstaller gives every EXE the same
+# a.scripts, so the split has to happen at runtime on argv[0] -- see
+# scripts/run_app.py. (Building a second Analysis + COLLECT would duplicate the
+# whole dependency tree, ExifTool and FFmpeg included, for nothing.)
+run_app = repo / "scripts" / "run_app.py"
+if not run_app.exists():
+    raise SystemExit(f"packaged entry not found: {run_app}")
 
 datas = [
     (str(repo / "assets" / "devices" / "phones.json"), "assets/devices"),
@@ -156,7 +160,7 @@ for pkg in ("PySide6", "shiboken6"):
 hiddenimports += ["ssl", "sysconfig"]
 
 a = Analysis(
-    [str(run_gui)],
+    [str(run_app)],
     pathex=[str(repo)],
     binaries=binaries,
     datas=datas,
@@ -192,8 +196,38 @@ exe = EXE(
     icon=_icon_file,
 )
 
+# Console sibling of the GUI binary. Both share this one COLLECT, so the two
+# entries cost a second bootloader + PYZ (~7 MB) and nothing else: every
+# dependency, the bundled ExifTool and FFmpeg are read from the shared
+# _internal/ tree.
+#
+# console=True is not cosmetic. On Windows a GUI-subsystem binary holds no
+# console handle, so a parent cmd/PowerShell (or an agent's subprocess call)
+# cannot capture stdout at all. Linux/macOS ignore the flag entirely -- keeping
+# both entries identical across platforms is what makes the artifact layout
+# predictable and lets one CI assertion cover all three jobs.
+exe_cli = EXE(
+    pyz,
+    a.scripts,
+    [],
+    exclude_binaries=True,
+    name="AI-Image-Process-CLI",
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=False,
+    console=True,
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+    icon=None,
+)
+
 coll = COLLECT(
     exe,
+    exe_cli,
     a.binaries,
     a.zipfiles,
     a.datas,
