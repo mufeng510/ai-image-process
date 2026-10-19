@@ -46,8 +46,6 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--enable-live-photo", action="store_true", help="enable live photo step")
     p.add_argument("--video-source", choices=["local_motion", "ai_video"], default=None)
     p.add_argument("--list-steps", action="store_true", help="list registry steps in order and exit")
-    p.add_argument("--prepare-iphone-import", default=None,
-                   help="prepare a dedicated i4Tools live-photo import dir from outputs and print guided steps")
     p.add_argument("--json-summary", action="store_true", help="print job summary JSON (progress goes to stderr)")
     p.add_argument("--dry-run", action="store_true",
                    help="run preflight only: report what would happen, write nothing")
@@ -174,23 +172,8 @@ def main(argv: list[str] | None = None) -> int:
         summary["dry_run"] = True
         summary["planned_output_dir"] = str(result.planned_output_dir) if result.planned_output_dir else None
         summary["planned_input_count"] = result.planned_input_count
-    if args.prepare_iphone_import and result.success:
-        from app.core.iphone_import.i4tools import I4ToolsImporter
-
-        pairs = []
-        for f in result.success:
-            outs = getattr(f, "output_path", None)
-            # recover bundle mov sibling
-            jpg = Path(str(outs)) if outs else None
-            mov = jpg.with_suffix(".mov") if jpg else None
-            pairs.append((jpg, mov if mov and mov.exists() else None))
-        pairs = [(j, m) for j, m in pairs if j and j.exists()]
-        imp = I4ToolsImporter()
-        prepared = imp.prepare(pairs, Path(args.prepare_iphone_import))
-        res = imp.import_live_photos(prepared)
-        summary["iphone_import"] = {"prepared_dir": str(prepared), "message": res.message}
-        # Keep stdout clean for --json-summary, like progress.
-        print(res.message, file=sys.stderr if args.json_summary else sys.stdout)
+    # No iPhone import block: the feature is a GUI button that only shows
+    # 爱思助手 guidance, so there is nothing for the CLI to do about it.
     if args.json_summary:
         print(json.dumps(summary, ensure_ascii=False, indent=2))
     else:

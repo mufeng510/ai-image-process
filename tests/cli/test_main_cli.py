@@ -293,3 +293,26 @@ def test_done_line_format_is_unchanged(cli, tmp_path):
     assert match, f"last line changed shape: {lines[-1]!r}"
     assert (match.group(1), match.group(2), match.group(3)) == ("1", "0", "False")
     assert not any(ln.startswith("FAIL") for ln in lines)
+
+
+# --- 7. the iPhone import feature is GUI-only --------------------------------
+
+
+def test_cli_has_no_iphone_import_flag():
+    """The import button is a GUI hint; the CLI exposes no flag for it, and a
+    retired flag must fail loudly instead of being silently accepted."""
+    from app.main_cli import build_parser
+
+    opts = {a.option_strings[0] for a in build_parser()._actions if a.option_strings}
+    assert "--prepare-iphone-import" not in opts
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["in", "-o", "out", "--prepare-iphone-import"])
+
+
+def test_run_leaves_no_iphone_import_section_in_the_summary(cli, tmp_path):
+    src, out = _inputs(tmp_path), tmp_path / "exports"
+    rc, captured = cli(str(src), "-o", str(out), "--json-summary")
+    assert rc == 0
+    summary = json.loads(captured.out)
+    assert "iphone_import" not in summary
+    assert "iPhone" not in captured.out and "iPhone" not in captured.err

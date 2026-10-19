@@ -4,13 +4,17 @@ Research conclusion (see docs/live-photo-testing.md):
 - Apple Devices/iTunes folder-sync treats JPG+MOV as two separate media and
   is unavailable when iCloud Photos is on -> poor fit for Live Photo.
 - i4Tools has a dedicated flow: 我的设备 -> 照片 -> 相机胶卷 -> 导入实况照片
-  -> 单张导入/批量导入, requiring JPG (or HEIC) + MOV with identical basenames,
-  then confirming on the phone via 照片处理工具/极速版. The pair then shows as
-  a single LIVE photo instead of two files.
+  -> 单张导入/批量导入, requiring JPG (or HEIC) + MOV with identical basenames
+  in one folder, then confirming on the phone via 照片处理工具/极速版. The pair
+  then shows as a single LIVE photo instead of two files.
 - i4Tools exposes no stable public CLI/automation API, so this backend stays
   honest: automatic=False, requires_user_sync=True (user confirms in i4Tools
-  + on the phone). We only detect the install, prepare the batch folder with
-  matching basenames, and best-effort launch i4Tools.
+  + on the phone).
+
+It therefore touches no files at all: a run already publishes the pairing
+shape i4Tools wants, a session may hold several batches, and the user picks
+the folder inside 爱思助手 regardless. All this backend does is detect the
+install, best-effort launch it, and spell out the steps.
 """
 from __future__ import annotations
 
@@ -19,8 +23,7 @@ import os
 import subprocess
 from pathlib import Path
 
-from app.core.iphone_import.base import ImportCapability, ImportResult
-from app.core.iphone_import.manual_sync import ManualSyncImporter
+from app.core.iphone_import.base import ImportCapability, ImportResult, IPhoneImporter
 
 
 # Known install folder names; new major versions use versioned folders
@@ -141,7 +144,7 @@ def _launch_i4tools(exe: str) -> tuple[bool, str]:
     return False, last + "；请手动打开爱思助手继续"
 
 
-class I4ToolsImporter(ManualSyncImporter):
+class I4ToolsImporter(IPhoneImporter):
     name = "i4tools"
 
     def detect(self) -> dict[str, object]:
@@ -151,30 +154,26 @@ class I4ToolsImporter(ManualSyncImporter):
             "paths": {"i4tools": found},
         }
 
-    def validate(self, pairs: list[tuple[Path, Path | None]]) -> list[str]:
-        issues: list[str] = []
-        for jpg, mov in pairs:
-            if not Path(jpg).exists():
-                issues.append(f"photo missing: {jpg}")
-                continue
-            if mov is None or not Path(mov).exists():
-                # i4Tools batch import matches JPG+MOV by identical basename;
-                # a still without its MOV would fail matching / lose LIVE.
-                issues.append(f"movie missing for live photo (need 同名 MOV): {jpg}")
-            elif Path(jpg).stem != Path(mov).stem:
-                issues.append(f"live photo basename mismatch: {jpg} vs {mov}")
-        return issues
-
-    def import_live_photos(self, prepared: Path) -> ImportResult:
+    def guidance(self, folder_hint: str | None = None) -> ImportResult:
+        """Launch 爱思助手 if installed and return the steps. Reads nothing."""
         det = self.detect()
         exe_list = det["paths"]["i4tools"]  # type: ignore[index]
         opened, launch_detail = _launch_i4tools(exe_list[0]) if exe_list else (False, "")
         steps = [
             "1. 用 USB 连接 iPhone 并在手机上信任此电脑，打开爱思助手并等待识别设备。",
-            f"2. 在爱思助手中进入：我的设备 → 照片 → 相机胶卷 → 导入实况照片 → 批量导入，选择文件夹：{prepared}",
-            "3. 批量导入要求同一目录下 JPG 与 MOV 文件名一致（除扩展名外完全相同），本工具已按此规则准备；若提示匹配失败请检查文件名。",
-            "4. 按爱思助手提示在手机上打开 照片处理工具/极速版（首次需安装并授予照片访问权限），等待导入完成。",
-            "5. 在 iPhone 照片中确认显示为一张 Live Photo（左上角 LIVE，长按可播放）；若分裂为照片+视频两个文件，说明配对未被识别，请保留样本并反馈。",
+            "2. 在爱思助手中进入：我的设备 → 照片 → 相机胶卷 → 导入实况照片 → 批量导入。",
+            "3. 在弹出的对话框里选择**要导入的那一批处理结果目录**。该目录里的实况照片已经是"
+            "「同名 x.jpg + x.mov」成对存放（爱思助手按文件名配对，两者必须在同一目录、"
+            "除扩展名外完全相同）；一次处理出多批时，选你要导入的那一批即可。",
+        ]
+        if folder_hint:
+            steps.append(f"   参考：本软件当前输出目录为 {folder_hint}"
+                         "（每次任务会在其下新建一个时间戳子文件夹，产物在那里）。")
+        steps += [
+            "4. 按爱思助手提示在手机上打开 照片处理工具/极速版（首次需安装并授予照片访问权限），"
+            "等待导入完成。",
+            "5. 在 iPhone 照片中确认显示为一张 Live Photo（左上角 LIVE，长按可播放）；"
+            "若分裂为照片+视频两个文件，说明配对未被识别，请保留样本并反馈。",
         ]
         if det["i4tools_installed"]:
             steps.insert(0, f"爱思助手唤起状态：{launch_detail}。")
@@ -189,7 +188,6 @@ class I4ToolsImporter(ManualSyncImporter):
         return ImportResult(
             ok=True,
             message="\n".join(steps),
-            prepared_dir=prepared,
             extra={"opened_app": opened, "launch_detail": launch_detail, **det},
         )
 
@@ -198,5 +196,5 @@ class I4ToolsImporter(ManualSyncImporter):
             automatic=False,
             requires_user_sync=True,
             transports=["usb"],
-            notes="i4Tools guided live-photo import (批量导入 JPG+MOV 同名配对); no public automation API",
+            notes="i4Tools guided live-photo import (指引 + 唤起，不复制任何文件); no public automation API",
         )

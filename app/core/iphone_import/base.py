@@ -1,9 +1,14 @@
-"""IPhoneImporter abstract interface."""
+"""IPhoneImporter abstract interface.
+
+The iPhone import feature is guidance, not transport: nothing in this package
+reads, copies or writes image files. A session may process several batches and
+the user still has to pick which folder to import inside 爱思助手, so the tool's
+whole job is to wake the assistant and print what to click.
+"""
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
 
@@ -19,8 +24,6 @@ class ImportCapability:
 class ImportResult:
     ok: bool
     message: str = ""
-    prepared_dir: Path | None = None
-    imported: list[Path] = field(default_factory=list)
     extra: dict[str, Any] = field(default_factory=dict)
 
 
@@ -32,15 +35,12 @@ class IPhoneImporter(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def validate(self, pairs: list[tuple[Path, Path | None]]) -> list[str]:
-        raise NotImplementedError
+    def guidance(self, folder_hint: str | None = None) -> ImportResult:
+        """Wake the assistant, return the click-by-click steps for the user.
 
-    @abstractmethod
-    def prepare(self, pairs: list[tuple[Path, Path | None]], dest: Path) -> Path:
-        raise NotImplementedError
-
-    @abstractmethod
-    def import_live_photos(self, prepared: Path) -> ImportResult:
+        `folder_hint` is display text only (usually the configured output
+        directory): it is shown in the steps, never opened.
+        """
         raise NotImplementedError
 
     def capability(self) -> ImportCapability:

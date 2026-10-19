@@ -86,43 +86,82 @@ def test_settings_hidden_and_live_roundtrip(qapp):
     dlg.close()
 
 
-def test_iphone_import_button_warns_without_output(qapp, tmp_path, monkeypatch):
-    _isolated_config(monkeypatch, tmp_path)
-    import app.gui.main_window as mw
+def _tree(root: Path) -> set[str]:
+    return {str(p.relative_to(root)) for p in root.rglob("*")}
 
-    win = MainWindow()
-    assert win.btn_iphone is not None
+
+def _capture_box(monkeypatch, mw):
+    """Record the import dialog's text instead of showing it."""
     seen = {}
-    monkeypatch.setattr(mw.QMessageBox, "warning",
-                        lambda *a, **k: seen.setdefault("warned", True))
-    win.out_edit.setText("")
-    win._import_iphone()
-    assert seen.get("warned") is True
-    win.close()
+
+    def fake_exec(self):
+        seen["text"] = self.text()
+        seen["info"] = self.informativeText()
+        seen["detail"] = self.detailedText()
+        return mw.QMessageBox.StandardButton.Ok
+
+    monkeypatch.setattr(mw.QMessageBox, "exec", fake_exec)
+    return seen
 
 
-def test_iphone_import_prepares_pairs(qapp, tmp_path, monkeypatch):
+def test_iphone_import_shows_guidance_and_writes_nothing(qapp, tmp_path, monkeypatch):
+    """The button is a hint: it shows the steps and leaves the disk untouched."""
     _isolated_config(monkeypatch, tmp_path)
     import app.gui.main_window as mw
     from PIL import Image
 
-    out = tmp_path / "out"; out.mkdir()
-    Image.new("RGB", (32, 32), (1, 2, 3)).save(out / "001.jpg")
-    (out / "001.mov").write_bytes(b"\x00" * 8192)
+    out = tmp_path / "exports" / "20261018-010101"
+    out.mkdir(parents=True)
+    Image.new("RGB", (16, 16), (1, 2, 3)).save(out / "001.jpg")
+    (out / "001.mov").write_bytes(b"\x00" * 64)
+
     win = MainWindow()
-    win.out_edit.setText(str(out))
-    sync = tmp_path / "sync"
-    monkeypatch.setattr(mw.QFileDialog, "getExistingDirectory",
-                        staticmethod(lambda *a, **k: ""))
-    monkeypatch.setattr(mw.QMessageBox, "question",
-                        staticmethod(lambda *a, **k: mw.QMessageBox.StandardButton.Yes))
-    shown = {}
-    monkeypatch.setattr(mw.QMessageBox, "exec",
-                        lambda self: shown.setdefault("shown", True))
+    assert win.btn_iphone is not None
+    win.out_edit.setText(str(out.parent))
+    before = _tree(tmp_path)   # after construction: the click is what must not write
+    seen = _capture_box(monkeypatch, mw)
     win._import_iphone()
-    assert shown.get("shown") is True
-    prepared = Path(win.out_edit.text()).parent / "iphone-sync"
-    assert (prepared / "001.jpg").exists() and (prepared / "001.mov").exists()
+
+    assert "不会复制或修改任何文件" in seen["text"]
+    assert "批量导入" in seen["info"]
+    assert "同名" in seen["info"]
+    # the folder is only shown as text
+    assert str(out.parent) in seen["detail"]
+    # no copy, no side folder, no new file anywhere
+    assert _tree(tmp_path) == before
+    win.close()
+
+
+def test_iphone_import_prefers_the_last_run_folder_as_the_hint(qapp, tmp_path, monkeypatch):
+    _isolated_config(monkeypatch, tmp_path)
+    import app.gui.main_window as mw
+
+    root = tmp_path / "exports"
+    root.mkdir()
+    win = MainWindow()
+    win.out_edit.setText(str(root))
+    win._last_output_dir = root / "20261018-010101"
+    seen = _capture_box(monkeypatch, mw)
+    win._import_iphone()
+    assert str(win._last_output_dir) in seen["detail"]
+    win.close()
+
+
+def test_iphone_import_works_without_any_output_configured(qapp, tmp_path, monkeypatch):
+    """No output dir is not an error: the steps are still what the user needs."""
+    _isolated_config(monkeypatch, tmp_path)
+    import app.gui.main_window as mw
+
+    win = MainWindow()
+    win.out_edit.setText("")
+    seen = _capture_box(monkeypatch, mw)
+    warn = {}
+    monkeypatch.setattr(mw.QMessageBox, "warning",
+                        lambda *a, **k: warn.setdefault("called", True))
+    win._import_iphone()
+    assert "批量导入" in seen["info"]
+    assert warn == {}          # no error dialog on the way
+    assert not [p for p in tmp_path.iterdir() if p.is_dir() and p.name.startswith("iphone-sync")]
     win.close()
 
 

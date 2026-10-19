@@ -169,7 +169,9 @@ class MainWindow(QMainWindow):
         self.btn_cancel.setEnabled(False)
         self.btn_cancel.clicked.connect(self._cancel)
         self.btn_iphone = QPushButton("导入 iPhone…")
-        self.btn_iphone.setToolTip("从输出目录准备 Live Photo 配对目录，指引爱思助手实况导入（需手动确认）")
+        self.btn_iphone.setToolTip(
+            "唤起爱思助手并显示实况照片导入操作指引（不复制任何文件；"
+            "在爱思助手中选择要导入的处理结果目录即可）")
         self.btn_iphone.clicked.connect(self._import_iphone)
         self.btn_settings = QPushButton("设置")
         self.btn_settings.clicked.connect(self._open_settings)
@@ -371,51 +373,41 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def _import_iphone(self) -> None:
-        """iPhone import via i4Tools: pairs from output dir -> import dir -> user imports."""
+        """iPhone import: wake 爱思助手 and show the click-by-click steps.
+
+        Deliberately does nothing to the filesystem. A session may process
+        several batches and the user still has to pick the folder inside
+        爱思助手, so scanning, copying or staging files here would only
+        duplicate bytes the user was going to select by hand anyway. The
+        output paths below are shown as text; they are never opened.
+        """
         from app.core.iphone_import.i4tools import I4ToolsImporter
 
-        out = self.out_edit.text().strip()
-        if not out or not Path(out).is_dir():
-            QMessageBox.warning(self, "提示", "请先选择已生成 Live Photo 的输出目录。")
-            return
-        jpgs = sorted(Path(out).glob("*.jpg"))
-        if not jpgs:
-            QMessageBox.warning(self, "提示", f"输出目录中没有 JPG：\n{out}")
-            return
-        pairs = [(j, j.with_suffix(".mov") if j.with_suffix(".mov").exists() else None)
-                 for j in jpgs]
         imp = I4ToolsImporter()
-        issues = imp.validate(pairs)
-        if issues:
-            QMessageBox.warning(self, "校验未通过", "\n".join(issues[:10]))
-            return
-        default_sync = str(Path(out).parent / "iphone-sync")
-        sync = QFileDialog.getExistingDirectory(self, "选择实况导入目录（专用目录，供爱思助手批量导入）", default_sync)
-        if not sync:
-            # user cancelled the dialog: offer to create/use the default
-            reply = QMessageBox.question(
-                self, "同步目录",
-                f"是否使用默认同步目录？\n{default_sync}\n（将自动创建，与隐藏图片库无关）")
-            if reply != QMessageBox.StandardButton.Yes:
-                return
-            sync = default_sync
-        try:
-            prepared = imp.prepare(pairs, Path(sync))
-        except Exception as exc:  # noqa: BLE001
-            QMessageBox.critical(self, "准备失败", str(exc))
-            return
-        res = imp.import_live_photos(prepared)
-        cap = imp.capability()
-        mode = "需手动在爱思助手中确认导入" if cap.requires_user_sync else "自动导入"
+        hint = self._iphone_folder_hint()
+        res = imp.guidance(folder_hint=hint)
         launch = str((res.extra or {}).get("launch_detail") or "")
-        self._append_log(f"[iPhone] {mode}，同步目录：{prepared}"
-                         + (f"，{launch}" if launch else ""))
+        self._append_log("[iPhone] 已显示爱思助手实况导入指引"
+                         + (f"，{launch}" if launch else "") + "（未复制任何文件）")
         box = QMessageBox(self)
         box.setWindowTitle("导入 iPhone")
-        box.setText(f"已准备 {len(pairs)} 对文件到同步目录（{mode}）。")
+        box.setText("本工具不会复制或修改任何文件。\n"
+                    "请在爱思助手中选择要导入的处理结果目录，完成实况照片导入。")
         box.setInformativeText(res.message)
-        box.setDetailedText(f"同步目录：{prepared}\n后端：{imp.name}\n" + res.message)
+        box.setDetailedText(
+            (f"参考目录：{hint}\n" if hint else "")
+            + f"后端：{imp.name}\n" + res.message)
         box.exec()
+
+    def _iphone_folder_hint(self) -> str | None:
+        """Text to show as "where the results are", without touching the disk.
+
+        The last finished run's folder is the most precise thing the window
+        already knows; otherwise fall back to the configured output root.
+        """
+        if self._last_output_dir is not None:
+            return str(self._last_output_dir)
+        return self.out_edit.text().strip() or None
 
     @Slot(object)
     def _on_progress(self, ev: object) -> None:

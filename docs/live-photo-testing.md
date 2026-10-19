@@ -48,9 +48,11 @@ python -m pytest tests/integration/live_photo -q
    ```powershell
    python -m app <输入> -o E:\lp-out --enable-live-photo --json-summary
    ```
-2. 打开 GUI → 选择输出目录 → **导入 iPhone**（或 CLI `--prepare-iphone-import E:\lp-sync`），
-   按爱思助手实况导入指引操作（我的设备 → 照片 → 相机胶卷 → 导入实况照片 → 批量导入，
-   选择导入目录；JPG 与 MOV 同名配对，手机端打开照片处理工具确认）。
+2. 打开 GUI → 选择输出目录 → **导入 iPhone**（仅 GUI，CLI 无此功能）。
+   这一步只会唤起爱思助手并显示指引，**不会复制或修改任何文件**：
+   按指引操作（我的设备 → 照片 → 相机胶卷 → 导入实况照片 → 批量导入，
+   选择本次任务的结果目录——里面已经是同名 `x.jpg` + `x.mov` 配对；
+   手机端打开照片处理工具确认）。
 3. 在 iPhone 照片中确认：
    - [ ] 显示为**一张** Live Photo（左上角 LIVE 标记）
    - [ ] 长按可以播放动态

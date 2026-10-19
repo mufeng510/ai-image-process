@@ -33,7 +33,9 @@
 - 版本化配置（导入 / 导出 / 重置），便携模式（配置 v2，老配置自动迁移；除上一条外新功能默认关闭）
 - 内置 ExifTool 与 FFmpeg（`Tools/`），**三个平台的发布包都自带**，开箱即用；缺失时按「内置 → 运行时安装目录 → 系统 PATH」顺序解析，并在「设置 → 处理 → 外部运行时」与主界面明示缺哪一个、影响哪个功能
 - 输出恒为 JPEG：没有任何重新编码步骤时若混入非 JPG 输入，任务在预检阶段就会被拦下（零产出），提交前还会再校验文件内容，拒绝把非 JPEG 字节写成 `.jpg`
-- iPhone 导入：独立工具（非 Pipeline 步骤），主界面「导入 iPhone…」按钮或 CLI `--prepare-iphone-import`；通过**爱思助手实况导入**（准备 JPG+MOV 同名配对目录，指引用户在爱思助手中批量导入并在手机端确认），无自动导入
+- iPhone 导入：**只是一个 GUI 提示入口**，不参与 Pipeline，也没有对应的 CLI 参数。点「导入 iPhone…」会尝试唤起**爱思助手**并弹出分步操作指引；除此之外**不读、不写、不复制任何文件**
+  - 处理结果本身已经是爱思助手要的形状（同一目录内 `x.jpg` + `x.mov` 同名配对），一次会话处理多批时在爱思助手里选要导入的那一批即可，所以中间文件夹、预检查、复制都没有意义
+  - 指引里会把当前输出目录（以及上一次任务的结果目录）作为文字提示显示出来，但不会去打开它
 - 冻结版（安装包/便携包）内置 **纯 Python wheel 安装器**，无需本机 pip 即可在线安装可选依赖
 
 ## 下载安装
@@ -73,7 +75,6 @@ inputs                 输入文件和/或文件夹（必填，多个）
 --hidden-library DIR   启用隐藏图片并指定素材库（可配 --hidden-opacity）
 --enable-live-photo    启用 Live Photo（可配 --video-source local_motion|ai_video）
 --list-steps           按顺序列出 Registry 步骤
---prepare-iphone-import DIR  从本次输出准备 iPhone 同步目录并打印引导步骤
 --dry-run              只跑预检：报告将要处理的文件与输出目录，不写任何文件
 --json-summary         输出任务摘要 JSON（含 preflight_failed/preflight_error/outputs）
 --version              显示版本
@@ -160,7 +161,7 @@ bash scripts/build_portable.sh
 app/
   core/          流水线、步骤实现、设备库、wheel 安装器、ExifTool 封装
     live_photo/  LivePhotoBuilder/Validator/MovieNormalizer/providers（local_motion/ai_video）
-    iphone_import/  爱思助手实况导入（i4tools 后端；JPG+MOV 同名配对目录）
+    iphone_import/  爱思助手实况导入指引（i4tools 后端：检测 + 唤起 + 分步说明，不碰文件）
   gui/           PySide6 主界面、设置、后台 worker
   config/        版本化配置 schema 与路径（当前 v2）
   platform/      平台相关（Windows 静默子进程等）

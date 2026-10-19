@@ -133,7 +133,6 @@ hiddenimports = [
     "app.core.live_photo.providers.ai_video",
     "app.core.iphone_import",
     "app.core.iphone_import.base",
-    "app.core.iphone_import.manual_sync",
     "app.core.iphone_import.i4tools",
     "app.core.dependency_installer",
     "app.config",
