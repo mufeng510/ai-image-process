@@ -122,6 +122,24 @@ unix 版 ExifTool 是 perl 脚本，所以安装包**同时内置了一个自包
 文件之前**拦下并说明原因；「设置 → 外部运行时」里有「安装」按钮，可一键把
 便携 perl 与 ExifTool 装进用户目录，**不需要管理员权限**。
 
+### 让 AI Agent 驱动 CLI
+
+```bash
+scripts/install_agent_skill.sh            # 装到 ~/.config/opencode/skills/，全局可用
+scripts/install_agent_skill.sh --uninstall
+scripts/install_agent_skill.sh --print    # 只打印 SKILL.md，不落盘
+```
+
+装完在 OpenCode 里问「用 AI Image Process 处理 ./photos」即可，描述匹配时会
+自动加载；也可显式写 `@ai-image-process`。**在本仓库内工作无需安装**——
+`.opencode/skills/ai-image-process/` 会被自动发现。
+
+Skill 只放「什么时候用、怎么用、哪里会静默出错」，参数表一律以 `--help` 为准
+（`--help` 不会漂移，抄进文档的副本会）。完整参考在
+[`docs/agent-cli.md`](docs/agent-cli.md)：退出码语义、摘要 JSON 结构、全部配置键
+与默认值、可复制配方、排查表。`tests/core/test_agent_cli_docs.py` 会检查文档里
+提到的配置键真实存在。
+
 版本来源：`app/version.py` 为唯一真实来源（当前 **0.3.0**），`pyproject.toml` 已对齐；
 请勿以 README 缓存版本为准。
 
