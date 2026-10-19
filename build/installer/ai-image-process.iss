@@ -2,7 +2,7 @@
 ; Expects dist\AI-Image-Process\ produced by scripts/build_windows.ps1
 
 #define MyAppName "AI Image Process"
-#define MyAppVersion "0.4.0"
+#define MyAppVersion "0.5.0"
 #define MyAppPublisher "mufeng"
 #define MyAppExeName "AI-Image-Process.exe"
 #define MyAppId "AI-Image-Process-Desktop"
