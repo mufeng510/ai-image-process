@@ -69,9 +69,13 @@ is only reachable through a JSON file passed to `--config`. The file is a
 
 ## Full reference
 
-Read `docs/agent-cli.md` in the project for the complete parameter list, every
-config key with defaults, copy-paste recipes, the summary JSON shape, and a
-troubleshooting table. Run `--help` for the authoritative flag list.
+Read `references/agent-cli.md` for the complete parameter list, every config key
+with defaults, copy-paste recipes, the summary JSON shape, and a troubleshooting
+table. It is installed next to this file; in a checkout of the project it lives
+at `docs/agent-cli.md`.
+
+Run `--help` for the authoritative flag list — it is generated from the parser
+and cannot drift.
 
 For runtime errors (ExifTool / FFmpeg missing), the preflight message says which
 one is missing and how to install it — read `preflight_error` in full rather than

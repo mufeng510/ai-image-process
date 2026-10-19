@@ -59,6 +59,26 @@ mkdir -p dist/AI-Image-Process
 cp -f LICENSE dist/AI-Image-Process/ 2>/dev/null || true
 cp -f README.md dist/AI-Image-Process/ 2>/dev/null || true
 
+# Ship the agent skill with the artifact. A user who downloaded the zip has no
+# repository, so without this the CLI is scriptable but the Agent-facing entry
+# point exists only for people who cloned the project -- and the README we just
+# copied tells them to run a script that would not be there.
+#
+# Layout mirrors the repo so the very same installer works from both places, and
+# so opening OpenCode inside the unzipped bundle discovers the skill directly.
+agent_skill_dir="$ROOT/.opencode/skills/ai-image-process"
+if [ -f "$agent_skill_dir/SKILL.md" ]; then
+  mkdir -p "$ROOT/dist/AI-Image-Process/.opencode/skills"
+  cp -R "$agent_skill_dir" "$ROOT/dist/AI-Image-Process/.opencode/skills/"
+  mkdir -p "$ROOT/dist/AI-Image-Process/docs" "$ROOT/dist/AI-Image-Process/scripts"
+  cp -f "$ROOT/docs/agent-cli.md" "$ROOT/dist/AI-Image-Process/docs/" 2>/dev/null || true
+  cp -f "$ROOT/scripts/install_agent_skill.sh" "$ROOT/dist/AI-Image-Process/scripts/"
+  chmod +x "$ROOT/dist/AI-Image-Process/scripts/install_agent_skill.sh" 2>/dev/null || true
+else
+  echo "[build] WARNING: .opencode/skills/ai-image-process/SKILL.md not found;" >&2
+  echo "[build]          the portable artifact will ship without the agent skill" >&2
+fi
+
 # Detect os/arch for artifact naming (runner-default only; no extra matrix)
 uname_s="$(uname -s || echo unknown)"
 uname_m="$(uname -m || echo unknown)"

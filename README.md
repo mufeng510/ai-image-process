@@ -130,15 +130,21 @@ scripts/install_agent_skill.sh --uninstall
 scripts/install_agent_skill.sh --print    # 只打印 SKILL.md，不落盘
 ```
 
-装完在 OpenCode 里问「用 AI Image Process 处理 ./photos」即可，描述匹配时会
-自动加载；也可显式写 `@ai-image-process`。**在本仓库内工作无需安装**——
-`.opencode/skills/ai-image-process/` 会被自动发现。
+**在本仓库内工作无需安装**——`.opencode/skills/ai-image-process/` 会被自动发现。
 
-Skill 只放「什么时候用、怎么用、哪里会静默出错」，参数表一律以 `--help` 为准
-（`--help` 不会漂移，抄进文档的副本会）。完整参考在
-[`docs/agent-cli.md`](docs/agent-cli.md)：退出码语义、摘要 JSON 结构、全部配置键
-与默认值、可复制配方、排查表。`tests/core/test_agent_cli_docs.py` 会检查文档里
-提到的配置键真实存在。
+**便携包里也有**：解压后目录结构与仓库一致，因此
+
+```bash
+cd /解压出来的目录 && scripts/install_agent_skill.sh    # 同样能装
+```
+
+或者干脆直接在解压目录里打开 OpenCode，Skill 同样会被发现。
+
+装完在 OpenCode 里问「用 AI Image Process 处理 ./photos」即可，描述匹配时会
+自动加载；也可显式写 `@ai-image-process`。完整参考随 Skill 一起安装在
+`references/agent-cli.md`（仓库里对应 `docs/agent-cli.md`）：退出码语义、
+摘要 JSON 结构、全部配置键与默认值、可复制配方、排查表。
+`tests/core/test_agent_cli_docs.py` 会检查文档里提到的配置键真实存在。
 
 版本来源：`app/version.py` 为唯一真实来源（当前 **0.3.0**），`pyproject.toml` 已对齐；
 请勿以 README 缓存版本为准。

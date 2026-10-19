@@ -79,6 +79,9 @@ jobs:
           # exactly why automation needs the -CLI sibling; losing either one
           # silently halves what the artifact can do.
           python -c "import zipfile; b={x.replace(chr(92),'/').rsplit('/',1)[-1] for x in zipfile.ZipFile('dist/AI-Image-Process-windows-x64-portable.zip').namelist()}; assert 'AI-Image-Process.exe' in b, 'GUI entry missing'; assert 'AI-Image-Process-CLI.exe' in b, 'CLI entry missing: packaged artifact is GUI-only, scripts and agents cannot drive it'; print('both entry points bundled ok')"
+          # The agent skill travels with the artifact: a user who downloaded
+          # the zip has no repo, and the bundled README points at this script.
+          python -c "import zipfile; n=[x.replace(chr(92),'/') for x in zipfile.ZipFile('dist/AI-Image-Process-windows-x64-portable.zip').namelist()]; assert any(x.endswith('.opencode/skills/ai-image-process/SKILL.md') for x in n), 'agent SKILL.md missing'; assert any(x.endswith('scripts/install_agent_skill.sh') for x in n), 'agent skill installer missing'; assert any(x.endswith('docs/agent-cli.md') for x in n), 'agent CLI reference missing'; print('agent skill bundled ok')"
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
@@ -140,6 +143,9 @@ jobs:
           # AI-Image-Process-CLI (console). One EXE would make the artifact
           # GUI-only, and no script or agent could drive it.
           python3 -c "import zipfile; b={x.rsplit('/',1)[-1] for x in zipfile.ZipFile('$target').namelist()}; assert 'AI-Image-Process' in b, 'GUI entry missing'; assert 'AI-Image-Process-CLI' in b, 'CLI entry missing: packaged artifact is GUI-only, scripts and agents cannot drive it'; print('both entry points bundled ok')"
+          # The agent skill travels with the artifact: a user who downloaded
+          # the zip has no repo, and the bundled README points at this script.
+          python3 -c "import zipfile; n=zipfile.ZipFile('$target').namelist(); assert any(x.endswith('.opencode/skills/ai-image-process/SKILL.md') for x in n), 'agent SKILL.md missing'; assert any(x.endswith('scripts/install_agent_skill.sh') for x in n), 'agent skill installer missing'; assert any(x.endswith('docs/agent-cli.md') for x in n), 'agent CLI reference missing'; print('agent skill bundled ok')"
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
@@ -187,6 +193,9 @@ jobs:
           # AI-Image-Process-CLI (console). One EXE would make the artifact
           # GUI-only, and no script or agent could drive it.
           python3 -c "import zipfile; b={x.rsplit('/',1)[-1] for x in zipfile.ZipFile('$primary').namelist()}; assert 'AI-Image-Process' in b, 'GUI entry missing'; assert 'AI-Image-Process-CLI' in b, 'CLI entry missing: packaged artifact is GUI-only, scripts and agents cannot drive it'; print('both entry points bundled ok')"
+          # The agent skill travels with the artifact: a user who downloaded
+          # the zip has no repo, and the bundled README points at this script.
+          python3 -c "import zipfile; n=zipfile.ZipFile('$primary').namelist(); assert any(x.endswith('.opencode/skills/ai-image-process/SKILL.md') for x in n), 'agent SKILL.md missing'; assert any(x.endswith('scripts/install_agent_skill.sh') for x in n), 'agent skill installer missing'; assert any(x.endswith('docs/agent-cli.md') for x in n), 'agent CLI reference missing'; print('agent skill bundled ok')"
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
