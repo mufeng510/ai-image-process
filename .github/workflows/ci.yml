@@ -26,16 +26,21 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq libgl1 libegl1 libglib2.0-0 libxkbcommon0 \
             libdbus-1-3 libfontconfig1 libx11-6 || true
-      # The runtimes are part of the product, not a test fixture: the preflight
+      # The runtimes are part of the product, not a test fixture. The preflight
       # gate refuses a job whose ExifTool cannot start, so a runner without it
       # fails six tests for the wrong reason and leaves that gate untested.
-      # Fetching them here makes CI exercise the real wrapper + bundled perl.
+      # FFmpeg earns its place the same way: without it every Live Photo and
+      # timed-track case silently skips, and a green run means less than it
+      # looks. Measured on this repo: 405 passed / 7 skipped without it,
+      # 410 / 2 with it.
       - name: Fetch external runtimes
         run: |
           bash scripts/fetch_perl.sh
           bash scripts/fetch_exiftool.sh
+          bash scripts/fetch_ffmpeg.sh
           test -x Tools/exiftool/exiftool
           test -x Tools/perl/bin/perl
+          test -x Tools/ffmpeg/ffmpeg
       - name: Test
         env:
           QT_QPA_PLATFORM: offscreen
