@@ -7,6 +7,10 @@ Research conclusion (see docs/live-photo-testing.md):
   -> 单张导入/批量导入, requiring JPG (or HEIC) + MOV with identical basenames
   in one folder, then confirming on the phone via 照片处理工具/极速版. The pair
   then shows as a single LIVE photo instead of two files.
+- The extension check is CASE-SENSITIVE: a bundle whose bytes are otherwise
+  valid is silently skipped when written lowercase "x.jpg + x.mov". Device
+  exports are "x.JPG + x.MOV" and so is everything this project commits
+  (see output_format.OUTPUT_JPG_EXT / OUTPUT_MOV_EXT).
 - i4Tools exposes no stable public CLI/automation API, so this backend stays
   honest: automatic=False, requires_user_sync=True (user confirms in i4Tools
   + on the phone).
@@ -163,7 +167,8 @@ class I4ToolsImporter(IPhoneImporter):
             "1. 用 USB 连接 iPhone 并在手机上信任此电脑，打开爱思助手并等待识别设备。",
             "2. 在爱思助手中进入：我的设备 → 照片 → 相机胶卷 → 导入实况照片 → 批量导入。",
             "3. 在弹出的对话框里选择**要导入的那一批处理结果目录**。该目录里的实况照片已经是"
-            "「同名 x.jpg + x.mov」成对存放（爱思助手按文件名配对，两者必须在同一目录、"
+            "「同名 x.JPG + x.MOV」成对存放（爱思助手按文件名配对，且对扩展名做**区分大小写**"
+            "的检查，小写 .jpg/.mov 会被直接跳过；两者必须在同一目录、"
             "除扩展名外完全相同）；一次处理出多批时，选你要导入的那一批即可。",
         ]
         if folder_hint:

@@ -1,4 +1,6 @@
 """LivePhoto builder/validator unit tests (ffmpeg optional; logic always tested)."""
+import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -15,7 +17,9 @@ from app.core.live_photo.metadata import (
     write_photo_identifier,
 )
 from app.core.live_photo.providers.base import MockAIVideoProvider
+from app.core.live_photo.timed_track import _parse_boxes
 from app.core.live_photo.validator import LivePhotoValidator
+from app.platform import CREATE_NO_WINDOW
 
 needs_ffmpeg = pytest.mark.skipif(resolve_ffmpeg() is None, reason="ffmpeg not available")
 
@@ -102,6 +106,45 @@ def test_mov_patch_and_read(tmp_path):
     assert ident in tags["identifiers"]
     # canonical timed track reports int8s -1 (time carried by SampleTime=0)
     assert tags["still_image_time_ms"] is not None
+
+
+@needs_tools
+def test_mov_carries_live_photo_keys_and_timestamps(tmp_path):
+    """A device capture's MOV marks itself as a Live Photo and stamps its
+    movie header; ffmpeg/exiftool alone leave both bare."""
+    photo = tmp_path / "a.jpg"
+    mov = tmp_path / "a.mov"
+    _img(photo)
+    _real_mov(mov)
+    exif = ExifToolRunner()
+    exif.run(["-overwrite_original", "-Make=Apple", "-Model=iPhone 15",
+              "-Software=iOS Camera", "-DateTimeOriginal=2026:10:09 19:23:40",
+              str(photo)])
+    patch_mov_with_livephoto_tags(mov, new_asset_identifier(), 0, still_path=photo)
+
+    proc = subprocess.run([str(exif.binary), "-j", str(mov)],
+                          capture_output=True, text=True,
+                          creationflags=CREATE_NO_WINDOW)
+    dump = json.loads(proc.stdout)[0]
+    assert dump.get("LivePhotoAuto") == 1
+    assert dump.get("FullFrameRatePlaybackIntent") == 1
+    assert dump.get("Make") == "Apple"
+    assert dump.get("Model") == "iPhone 15"
+    assert dump.get("Software") == "iOS Camera"
+    assert dump.get("CreationDate")
+    assert not str(dump.get("CreateDate")).startswith("0000")
+
+
+@needs_tools
+def test_mov_left_in_movie_order_after_patch(tmp_path):
+    """ExifTool's rewrite puts moov first; the patch must put it back so the
+    file matches a real capture's ftyp/mdat/moov layout."""
+    mov = tmp_path / "c.mov"
+    _real_mov(mov)
+    patch_mov_with_livephoto_tags(mov, new_asset_identifier(), 0)
+    types = [t.decode("latin1")
+             for t, _o, _s, _h in _parse_boxes(mov.read_bytes())]
+    assert types.index("moov") > types.index("mdat")
 
 
 def test_validator_catches_mismatch_and_missing(tmp_path):

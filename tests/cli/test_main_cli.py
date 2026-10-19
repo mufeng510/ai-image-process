@@ -24,6 +24,7 @@ from PIL import Image
 
 from app.config.schema import default_config
 from app.core.models import ProgressKind
+from app.core.output_format import OUTPUT_JPG_EXT
 from app.core.pipeline import run_job
 from app.main_cli import main as cli_main
 
@@ -110,7 +111,7 @@ def test_missing_path_exits_2_and_writes_nothing(cli, tmp_path):
     assert "输入路径不存在" in captured.out
     assert str(tmp_path / "does-not-exist") in captured.out  # names the bad path
     assert not out.exists(), "a refused job must leave no output folder behind"
-    assert list(tmp_path.rglob("*.jpg")) == []  # not a single image anywhere
+    assert list(tmp_path.rglob(f"*{OUTPUT_JPG_EXT}")) == []  # not a single image anywhere
 
 
 def test_directory_without_images_exits_2(cli, tmp_path):
@@ -167,7 +168,7 @@ def test_json_summary_sends_progress_to_stderr_only(cli, tmp_path):
     for entry in summary["outputs"]:
         assert set(entry) == {"source", "output"}
         produced = Path(entry["output"])
-        assert produced.is_file() and produced.suffix == ".jpg"
+        assert produced.is_file() and produced.suffix == OUTPUT_JPG_EXT
 
 
 # --- 3. the summary names what was produced -----------------------------------
@@ -260,10 +261,11 @@ def test_run_job_without_dry_run_writes_the_files(tmp_path):
     assert (result.success_count, result.failure_count) == (2, 0)
     leaves = [p for p in exports.iterdir() if p.is_dir()]
     assert len(leaves) == 1, "the run folder the dry run refused to claim"
-    assert sorted(p.name for p in leaves[0].glob("*.jpg")) == ["photo0.jpg", "photo1.jpg"]
+    assert sorted(p.name for p in leaves[0].glob(f"*{OUTPUT_JPG_EXT}")) == [
+        f"photo0{OUTPUT_JPG_EXT}", f"photo1{OUTPUT_JPG_EXT}"]
     assert len({str(f.output_path) for f in result.success}) == 2
     for f in result.success:
-        assert Path(f.output_path).is_file() and f.output_path.suffix == ".jpg"
+        assert Path(f.output_path).is_file() and f.output_path.suffix == OUTPUT_JPG_EXT
 
 
 # --- 6. regressions: the non-JSON path must behave exactly as before --------

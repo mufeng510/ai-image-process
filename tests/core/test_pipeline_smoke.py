@@ -3,6 +3,7 @@ from pathlib import Path
 from PIL import Image
 
 from app.config.schema import default_config
+from app.core.output_format import OUTPUT_JPG_EXT
 from app.core.pipeline import run_job
 
 
@@ -23,7 +24,7 @@ def test_pipeline_smoke(tmp_path: Path):
     result = run_job(cfg, [src], output_dir=out, seed=42, temp_base=tmp_path / "tmp")
     assert result.failure_count == 0
     assert result.success_count == 1
-    outputs = list(out.glob("*.jpg"))
+    outputs = list(out.glob(f"*{OUTPUT_JPG_EXT}"))
     assert len(outputs) == 1
     assert outputs[0].stat().st_size > 0
     # source preserved

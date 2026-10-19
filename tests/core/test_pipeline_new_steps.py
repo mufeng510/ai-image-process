@@ -6,6 +6,7 @@ from PIL import Image
 
 from app.config.schema import default_config
 from app.core.exiftool_runner import ExifToolRunner
+from app.core.output_format import OUTPUT_JPG_EXT, OUTPUT_MOV_EXT
 from app.core.pipeline import DEFAULT_STEP_ORDER, build_default_registry, run_job
 from app.core.ffmpeg_resolver import resolve_ffmpeg
 
@@ -59,8 +60,8 @@ def test_step_combos_without_livephoto(tmp_path, rotate, hidden):
     cfg.steps.hidden_image.library_dir = str(lib)
     r = run_job(cfg, [src], output_dir=out, seed=5, temp_base=tmp_path / "tmp")
     assert r.preflight_failed is False and r.failure_count == 0
-    assert len(list(out.glob("*.jpg"))) == 1
-    assert list(out.glob("*.mov")) == []
+    assert len(list(out.glob(f"*{OUTPUT_JPG_EXT}"))) == 1
+    assert list(out.glob(f"*{OUTPUT_MOV_EXT}")) == []
 
 
 def test_defaults_off_regression_matches_legacy(tmp_path):
@@ -69,7 +70,7 @@ def test_defaults_off_regression_matches_legacy(tmp_path):
     _img(src / "a.png")
     r = run_job(cfg, [src], output_dir=out, seed=42, temp_base=tmp_path / "tmp")
     assert r.success_count == 1 and r.preflight_failed is False
-    assert len(list(out.glob("*.jpg"))) == 1 and len(list(out.glob("*.mov"))) == 0
+    assert len(list(out.glob(f"*{OUTPUT_JPG_EXT}"))) == 1 and len(list(out.glob("*.mov"))) == 0
 
 
 @needs_ffmpeg
@@ -82,7 +83,7 @@ def test_live_photo_bundle_atomic_and_shared_basename(tmp_path):
     _img(src / "a.jpg", size=(320, 240))
     r = run_job(cfg, [src], output_dir=out, seed=5, temp_base=tmp_path / "tmp")
     assert r.failure_count == 0
-    jpgs = sorted(out.glob("*.jpg")); movs = sorted(out.glob("*.mov"))
+    jpgs = sorted(out.glob(f"*{OUTPUT_JPG_EXT}")); movs = sorted(out.glob(f"*{OUTPUT_MOV_EXT}"))
     assert len(jpgs) == 1 and len(movs) == 1
     assert jpgs[0].stem == movs[0].stem  # 001.jpg + 001.mov share basename
 
@@ -92,7 +93,7 @@ def test_livephoto_off_produces_no_mov(tmp_path):
     cfg.steps.device_metadata.enabled = False
     _img(src / "a.jpg")
     r = run_job(cfg, [src], output_dir=out, seed=5, temp_base=tmp_path / "tmp")
-    assert list(out.glob("*.mov")) == []
+    assert list(out.glob(f"*{OUTPUT_MOV_EXT}")) == []
 
 
 def test_output_off_keeps_staging_semantics(tmp_path):
@@ -102,7 +103,7 @@ def test_output_off_keeps_staging_semantics(tmp_path):
     _img(src / "a.jpg")
     r = run_job(cfg, [src], output_dir=out, seed=5, temp_base=tmp_path / "tmp")
     assert r.success_count == 1
-    assert list(out.glob("*.jpg")) == []
+    assert list(out.glob(f"*{OUTPUT_JPG_EXT}")) == []
 
 
 def test_output_off_retains_hidden_images(tmp_path):
@@ -117,7 +118,7 @@ def test_output_off_retains_hidden_images(tmp_path):
     r = run_job(cfg, [src], output_dir=out, seed=5, temp_base=tmp_path / "tmp")
     assert r.success_count == 1  # steps ok, nothing committed
     assert (lib / "h.jpg").exists()  # retained: no committed output
-    assert list(out.glob("*.jpg")) == []
+    assert list(out.glob(f"*{OUTPUT_JPG_EXT}")) == []
 
 
 def test_rename_off_uses_original_names(tmp_path):
@@ -128,7 +129,8 @@ def test_rename_off_uses_original_names(tmp_path):
     _img(src / "keepme.jpg", color=(30, 60, 90))
     r = run_job(cfg, [src], output_dir=out, seed=5, temp_base=tmp_path / "tmp")
     assert r.success_count == 1
-    assert (out / "keepme.jpg").exists()
+    # extension is normalized to OUTPUT_JPG_EXT even when rename is off
+    assert (out / f"keepme{OUTPUT_JPG_EXT}").exists()
 
 
 def test_rename_after_dedup_shared_stem(tmp_path):
@@ -139,7 +141,7 @@ def test_rename_after_dedup_shared_stem(tmp_path):
     _img(src / "a.jpg", color=(30, 60, 90)); _img(src / "b.jpg", color=(31, 61, 91))  # distinct
     r = run_job(cfg, [src], output_dir=out, seed=5, temp_base=tmp_path / "tmp")
     assert r.success_count == 2
-    assert {p.stem for p in out.glob("*.jpg")} == {"P_001", "P_002"}
+    assert {p.stem for p in out.glob(f"*{OUTPUT_JPG_EXT}")} == {"P_001", "P_002"}
 
 
 def test_cli_summary_flags(tmp_path):

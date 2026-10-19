@@ -13,6 +13,7 @@ from app.core.errors import to_user_message
 from app.core.exiftool_runner import ExifToolRunner
 from app.core.hidden_images import delete_hidden_image
 from app.core.output_paths import resolve_run_folder
+from app.core.output_format import OUTPUT_JPG_EXT
 from app.core.models import (
     CancelToken,
     FileResult,
@@ -190,7 +191,7 @@ def run_job(
         stem = preflight.basenames.get(str(rec.source_path))
         if stem:
             rec.output_stem = stem
-            rec.output_name = f"{stem}.jpg"
+            rec.output_name = f"{stem}{OUTPUT_JPG_EXT}"
         hpath = preflight.hidden_mapping.get(str(rec.source_path))
         if hpath is not None:
             rec.assigned_hidden_image = hpath

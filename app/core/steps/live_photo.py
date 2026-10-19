@@ -7,6 +7,7 @@ from app.config.schema import AppConfig
 from app.core.live_photo.builder import LivePhotoBuilder
 from app.core.live_photo.validator import LivePhotoValidator
 from app.core.models import StepResult
+from app.core.output_format import strip_jpg_ext, strip_mov_ext
 from app.core.steps.base import Step, StepContext
 
 
@@ -49,8 +50,7 @@ class LivePhotoStep(Step):
                 return StepResult(self.id, False, error="FFmpeg not available for movie normalization")
             ffprobe = resolve_ffprobe()
             stem = ctx.record.output_stem or ctx.record.output_name or f"{ctx.record.index:04d}"
-            if stem.endswith(".jpg"):
-                stem = stem[: -len(".jpg")]
+            stem = strip_jpg_ext(strip_mov_ext(stem))
             cfg = ctx.config.steps.live_photo
             rng = ctx.resources.get("rng")
             seed = rng.randrange(1 << 30) if rng else 0

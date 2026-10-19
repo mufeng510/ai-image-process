@@ -5,6 +5,7 @@ from PIL import Image
 
 from app.config.schema import default_config
 from app.core.image_metadata import build_device_tags, extract_hidden_metadata_source
+from app.core.output_format import OUTPUT_JPG_EXT
 from app.core.pipeline import run_job
 
 
@@ -68,7 +69,7 @@ def test_metadata_survives_rotate_and_hidden(tmp_path):
     cfg.paths.temp_dir = str(tmp_path / "tmp")
     r = run_job(cfg, [src], output_dir=out, seed=11, temp_base=tmp_path / "tmp")
     assert r.failure_count == 0
-    outs = list(out.glob("*.jpg"))
+    outs = list(out.glob(f"*{OUTPUT_JPG_EXT}"))
     assert len(outs) == 1
     with Image.open(outs[0]) as im:
         assert abs((im.size[0] / im.size[1]) - (200 / 150)) / (200 / 150) < 0.02  # aspect kept

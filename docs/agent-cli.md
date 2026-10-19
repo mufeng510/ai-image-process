@@ -72,8 +72,8 @@ jq -r '.outputs[].output' result.json
   "preflight_failed": false,
   "preflight_error": null,   // 预检失败时的中文说明，含修复指引
   "steps": ["deduplicate", "rename", "..."],   // 本次执行的步骤顺序
-  "outputs": [               // 每条给出输入 → 产出，产物恒为 .jpg
-    { "source": "/abs/in/a.jpg", "output": "/abs/out/20261019-101500/a.jpg" }
+  "outputs": [               // 每条给出输入 → 产出，产物恒为 .JPG
+    { "source": "/abs/in/a.jpg", "output": "/abs/out/20261019-101500/a.JPG" }
   ],
   "failures": [              // 只有失败项
     { "file": "/abs/in/b.tif", "error": "LivePhoto Stage-1 validation failed: ..." }
@@ -123,7 +123,8 @@ jq -r '.outputs[].output' result.json
 `deduplicate → rename → provenance_cleanup → visible_watermark → reencode →
 device_metadata → rotate_crop → hidden_image → live_photo → output_write`
 
-产物恒为 `.jpg`：如果输入里有 TIFF/PNG 而没有启用任何会重编码的步骤，预检会
+产物恒为 `.JPG`（大写：爱思助手对扩展名做区分大小写的检查，小写会被直接跳过）：
+如果输入里有 TIFF/PNG 而没有启用任何会重编码的步骤，预检会
 直接拒绝（`rc=2`），而不是产出一个后缀骗人的文件。
 
 ---

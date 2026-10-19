@@ -7,6 +7,7 @@ from pathlib import Path
 from app.config.schema import AppConfig
 from app.core.conflicts import ConflictPolicy, resolve_output_path
 from app.core.models import StepResult
+from app.core.output_format import OUTPUT_JPG_EXT, OUTPUT_MOV_EXT
 from app.core.steps.base import Step, StepContext
 
 
@@ -23,8 +24,8 @@ def _resolve_bundle(dest_jpg: Path, dest_mov: Path, policy: ConflictPolicy):
     # rename: shared new stem (bounded attempts; conflicts resolved by policy)
     stem, n = dest_jpg.stem, 1
     while n <= 10000:
-        cand_jpg = dest_jpg.parent / f"{stem}_{n}.jpg"
-        cand_mov = dest_mov.parent / f"{stem}_{n}.mov"
+        cand_jpg = dest_jpg.parent / f"{stem}_{n}{OUTPUT_JPG_EXT}"
+        cand_mov = dest_mov.parent / f"{stem}_{n}{OUTPUT_MOV_EXT}"
         if not cand_jpg.exists() and not cand_mov.exists():
             return cand_jpg, cand_mov
         n += 1
@@ -59,8 +60,8 @@ class OutputWriteStep(Step):
 
             if bundle is not None and ctx.config.steps.live_photo.enabled:
                 stem = ctx.record.output_stem or Path(bundle.photo_path).stem
-                dest_jpg = out_dir / f"{stem}.jpg"
-                dest_mov = out_dir / f"{stem}.mov"
+                dest_jpg = out_dir / f"{stem}{OUTPUT_JPG_EXT}"
+                dest_mov = out_dir / f"{stem}{OUTPUT_MOV_EXT}"
                 final_jpg, final_mov = _resolve_bundle(dest_jpg, dest_mov, policy)
                 if final_jpg is None:
                     return StepResult(self.id, True, message="skipped existing bundle")
@@ -91,8 +92,8 @@ class OutputWriteStep(Step):
                 import uuid as _uuid
 
                 tag = _uuid.uuid4().hex[:8]
-                tmp_jpg = final_jpg.with_name(f"{final_jpg.stem}.part-{tag}.jpg")
-                tmp_mov = final_mov.with_name(f"{final_mov.stem}.part-{tag}.mov")
+                tmp_jpg = final_jpg.with_name(f"{final_jpg.stem}.part-{tag}{OUTPUT_JPG_EXT}")
+                tmp_mov = final_mov.with_name(f"{final_mov.stem}.part-{tag}{OUTPUT_MOV_EXT}")
                 for t in (tmp_jpg, tmp_mov):
                     if t.exists():
                         t.unlink()
@@ -123,7 +124,7 @@ class OutputWriteStep(Step):
                 created.extend([final_jpg, final_mov])
                 return StepResult(self.id, True, message=f"committed bundle {final_jpg.name}+{final_mov.name}")
 
-            name = ctx.record.output_name or f"{ctx.record.original_name}.jpg"
+            name = ctx.record.output_name or f"{ctx.record.original_name}{OUTPUT_JPG_EXT}"
             dest = out_dir / name
             final = resolve_output_path(dest, policy)
             if final is None:

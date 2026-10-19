@@ -13,6 +13,7 @@ from PIL import Image
 
 from app.config.schema import AppConfig, default_config
 from app.core import output_paths
+from app.core.output_format import OUTPUT_JPG_EXT
 from app.core.output_paths import MAX_SUFFIX_ATTEMPTS, resolve_run_folder, run_folder_name
 from app.core.pipeline import run_job
 
@@ -129,8 +130,9 @@ def test_run_job_publishes_into_one_timestamped_subfolder(tmp_path):
     subs = sorted(p for p in exports.iterdir() if p.is_dir())
     assert len(subs) == 1
     assert re.fullmatch(r"\d{8}-\d{6}", subs[0].name)
-    assert sorted(p.name for p in subs[0].glob("*.jpg")) == ["photo0.jpg", "photo1.jpg"]
-    assert list(exports.glob("*.jpg")) == []  # nothing written straight into the root
+    assert sorted(p.name for p in subs[0].glob(f"*{OUTPUT_JPG_EXT}")) == [
+        f"photo0{OUTPUT_JPG_EXT}", f"photo1{OUTPUT_JPG_EXT}"]
+    assert list(exports.glob(f"*{OUTPUT_JPG_EXT}")) == []  # nothing written straight into the root
 
 
 def test_repeated_runs_never_share_or_overwrite_a_folder(tmp_path, monkeypatch):
@@ -138,19 +140,20 @@ def test_repeated_runs_never_share_or_overwrite_a_folder(tmp_path, monkeypatch):
     src, exports = _inputs(tmp_path), tmp_path / "exports"
     _run(_config(tmp_path), src, exports, tmp_path)
     first = exports / STAMP
-    before = {p.name: p.stat().st_size for p in first.glob("*.jpg")}
+    before = {p.name: p.stat().st_size for p in first.glob(f"*{OUTPUT_JPG_EXT}")}
     assert len(before) == 2 and all(size > 0 for size in before.values())
     _run(_config(tmp_path), src, exports, tmp_path)
     assert sorted(p.name for p in exports.iterdir()) == [STAMP, f"{STAMP}-2"]
-    assert {p.name: p.stat().st_size for p in first.glob("*.jpg")} == before  # run 1 intact
-    assert len(list((exports / f"{STAMP}-2").glob("*.jpg"))) == 2
+    assert {p.name: p.stat().st_size for p in first.glob(f"*{OUTPUT_JPG_EXT}")} == before  # run 1 intact
+    assert len(list((exports / f"{STAMP}-2").glob(f"*{OUTPUT_JPG_EXT}"))) == 2
 
 
 def test_subfolder_per_run_false_writes_into_the_chosen_directory(tmp_path):
     src, exports = _inputs(tmp_path), tmp_path / "exports"
     result = _run(_config(tmp_path, subfolder=False), src, exports, tmp_path)
     assert (result.success_count, result.failure_count) == (2, 0)
-    assert sorted(p.name for p in exports.glob("*.jpg")) == ["photo0.jpg", "photo1.jpg"]
+    assert sorted(p.name for p in exports.glob(f"*{OUTPUT_JPG_EXT}")) == [
+        f"photo0{OUTPUT_JPG_EXT}", f"photo1{OUTPUT_JPG_EXT}"]
     assert [p for p in exports.iterdir() if p.is_dir()] == []
 
 
@@ -295,8 +298,9 @@ def test_placeholder_creation_survives_another_job_taking_the_name(tmp_path, mon
     assert result.success_count == 2
     theirs, ours = exports / STAMP, exports / f"{STAMP}-2"
     assert (theirs / "theirs.jpg").read_bytes() == b"not-ours"  # theirs, untouched
-    assert not (theirs / "photo0.jpg").exists()  # we did not share their folder
-    assert sorted(p.name for p in ours.glob("*.jpg")) == ["photo0.jpg", "photo1.jpg"]
+    assert not (theirs / f"photo0{OUTPUT_JPG_EXT}").exists()  # we did not share their folder
+    assert sorted(p.name for p in ours.glob(f"*{OUTPUT_JPG_EXT}")) == [
+        f"photo0{OUTPUT_JPG_EXT}", f"photo1{OUTPUT_JPG_EXT}"]
 
 
 def test_unusable_run_folder_is_a_refusal_not_a_traceback(tmp_path, monkeypatch):

@@ -26,6 +26,14 @@ MAKERNOTE_TAG_ID = 0x927C
 APPLE_CONTENT_IDENTIFIER_TAG = 0x0011
 _PLACEHOLDER_UUID = "00000000-0000-0000-0000-000000000000"
 
+# A real iPhone capture's MOV carries these next to the content identifier; they
+# are what marks the movie as a Live Photo rather than a plain clip. Verified
+# against a device export (iPhone 15, iOS 27.0.1).
+LIVE_PHOTO_KEY_TAGS = (
+    "-Keys:LivePhotoAuto=1",
+    "-Keys:FullFrameRatePlaybackIntent=1",
+)
+
 # Custom 16-byte user-type for our appended uuid box (random but fixed).
 AIP_UUID_USERTYPE = bytes.fromhex("A15050524F435553544B465641554C50")
 
@@ -194,13 +202,52 @@ def read_photo_identifiers(photo_path: Path, exiftool=None) -> list[str]:
     return found
 
 
+def read_still_identity(photo_path: Path, exiftool=None) -> dict:
+    """Device identity + capture time as written on the still JPEG.
+
+    A real capture's MOV repeats its JPEG's make/model/software and carries a
+    creation date. Reading them back off the still keeps the two resources
+    self-consistent regardless of which steps ran before Live Photo.
+    """
+    out: dict = {}
+    try:
+        if exiftool is None:
+            from app.core.exiftool_runner import ExifToolRunner
+
+            exiftool = ExifToolRunner()
+        if getattr(exiftool, "available", lambda: False)():
+            import subprocess as sp
+
+            from app.platform import CREATE_NO_WINDOW
+
+            proc = sp.run([str(exiftool.binary), "-j", "-n", str(photo_path)],
+                          capture_output=True, text=True, check=False,
+                          creationflags=CREATE_NO_WINDOW)
+            if proc.returncode == 0 and proc.stdout.strip():
+                dump = json.loads(proc.stdout)[0]
+                out = {
+                    "make": dump.get("Make"),
+                    "model": dump.get("Model") or dump.get("CameraModelName"),
+                    "software": dump.get("Software"),
+                    "captured": (dump.get("DateTimeOriginal")
+                                 or dump.get("CreateDate")),
+                }
+    except Exception:
+        pass
+    return {k: str(v).strip() for k, v in out.items() if v and str(v).strip()}
+
+
 def patch_mov_with_livephoto_tags(mov_path: Path, identifier: str, still_ms: int,
-                                   exiftool=None) -> None:
+                                   exiftool=None, still_path: Path | None = None) -> None:
     """Attach pairing metadata to MOV (Keys + mebx timed track).
 
     Direct ExifTool writes of still-image-time are NOT attempted: the tag is
     non-writable and lives in a timed-metadata track, handled instead by
     timed_track.add_still_image_time_track() below.
+
+    ExifTool rewrites the whole movie and puts moov in front of mdat - the one
+    layout normalize_movie() was written to avoid - so move_moov_after_mdat
+    puts it back before the timed track is spliced.
 
     NOTE: no custom top-level uuid box is appended anymore. Real iPhone
     captures carry none, and a non-standard trailing box is a needless
@@ -212,14 +259,33 @@ def patch_mov_with_livephoto_tags(mov_path: Path, identifier: str, still_ms: int
 
         exiftool = ExifToolRunner()
     if getattr(exiftool, "available", lambda: False)():
-        for tag in (
-            f"-XMP-xmp:ImageUniqueID={identifier}",
-            f"-Keys:ContentIdentifier={identifier}",
-        ):
-            try:
-                exiftool.run(["-overwrite_original", tag, str(mov_path)])
-            except Exception:
-                continue
+        identity = read_still_identity(still_path, exiftool) if still_path else {}
+        tags = [f"-Keys:ContentIdentifier={identifier}", *LIVE_PHOTO_KEY_TAGS]
+        for key, field in (("Make", "make"), ("Model", "model"),
+                           ("Software", "software"), ("CreationDate", "captured")):
+            if identity.get(field):
+                tags.append(f"-Keys:{key}={identity[field]}")
+        # QuickTime movie header: ffmpeg leaves these at 0000:00:00, a device
+        # capture always stamps them.
+        if identity.get("captured"):
+            tags += [f"-QuickTime:CreateDate={identity['captured']}",
+                     f"-QuickTime:ModifyDate={identity['captured']}"]
+        try:
+            exiftool.run(["-overwrite_original", *tags, str(mov_path)])
+        except Exception:
+            # One rejected tag must not cost the pairing identifier.
+            for tag in tags:
+                try:
+                    exiftool.run(["-overwrite_original", tag, str(mov_path)])
+                except Exception:
+                    continue
+    # Restore moov-after-mdat so the timed-track splice needs no stco patching.
+    try:
+        from app.core.live_photo.moov_order import move_moov_after_mdat
+
+        move_moov_after_mdat(mov_path)
+    except Exception:
+        pass
     # Canonical still-image-time: splice a mebx timed-metadata track.
     # Best-effort and never fatal - validator flags a missing marker.
     try:

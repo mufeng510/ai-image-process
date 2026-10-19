@@ -11,7 +11,12 @@ from PIL import Image
 
 from app.config.schema import default_config
 from app.core.models import FileRecord, JobWorkspace
-from app.core.output_format import is_jpeg_file, non_jpeg_records, pipeline_produces_jpeg
+from app.core.output_format import (
+    OUTPUT_JPG_EXT,
+    is_jpeg_file,
+    non_jpeg_records,
+    pipeline_produces_jpeg,
+)
 from app.core.pipeline import run_job
 from app.core.steps.base import StepContext
 from app.core.steps.output_write import OutputWriteStep
@@ -136,7 +141,7 @@ def test_non_jpeg_inputs_become_real_jpegs_when_reencode_is_on(tmp_path):
 
     assert result.preflight_failed is False
     assert result.failure_count == 0 and result.success_count == 3
-    outputs = sorted(out.glob("*.jpg")); assert len(outputs) == 3
+    outputs = sorted(out.glob(f"*{OUTPUT_JPG_EXT}")); assert len(outputs) == 3
     for path in outputs:
         assert is_jpeg_file(path), f"{path.name} does not start with the JPEG SOI marker"
         with Image.open(path) as im:
@@ -155,7 +160,7 @@ def test_jpeg_only_input_passes_through_with_every_step_off(tmp_path):
 
     assert result.preflight_failed is False
     assert result.failure_count == 0 and result.success_count == 2
-    outputs = sorted(out.glob("*.jpg")); assert len(outputs) == 2
+    outputs = sorted(out.glob(f"*{OUTPUT_JPG_EXT}")); assert len(outputs) == 2
     for path in outputs:
         with Image.open(path) as im:
             assert im.format == "JPEG"

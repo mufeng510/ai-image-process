@@ -15,6 +15,7 @@ from app.core.live_photo.movie import normalize_movie
 from app.core.live_photo.providers.ai_video import build_ai_provider
 from app.core.live_photo.providers.base import VideoGeneratorContext
 from app.core.live_photo.providers.local_motion import LocalMotionVideoGenerator
+from app.core.output_format import OUTPUT_JPG_EXT, OUTPUT_MOV_EXT
 from app.platform import CREATE_NO_WINDOW
 
 
@@ -32,7 +33,7 @@ class LivePhotoBuilder:
         work = staging / f"lp_{stem}"
         work.mkdir(parents=True, exist_ok=True)
         # still frame: copy final pixels to staging still (anchor frame)
-        still_out = staging / f"{stem}.jpg"
+        still_out = staging / f"{stem}{OUTPUT_JPG_EXT}"
         shutil.copy2(still_jpeg, still_out)
 
         from PIL import Image
@@ -62,7 +63,7 @@ class LivePhotoBuilder:
             normalize_movie(raw, norm, ffmpeg=self.ffmpeg, duration_seconds=duration,
                             still_size=still_size)
 
-        video_out = staging / f"{stem}.mov"
+        video_out = staging / f"{stem}{OUTPUT_MOV_EXT}"
         if video_out.exists():
             video_out.unlink()
         shutil.move(str(norm), str(video_out))
@@ -71,7 +72,7 @@ class LivePhotoBuilder:
         identifier = new_asset_identifier()
         write_photo_identifier(still_out, identifier, exiftool=self.exiftool)
         patch_mov_with_livephoto_tags(video_out, identifier, int(still_time_ms),
-                                      exiftool=self.exiftool)
+                                      exiftool=self.exiftool, still_path=still_out)
         return LivePhotoBundle(
             photo_path=still_out,
             video_path=video_out,

@@ -18,11 +18,41 @@ from pathlib import Path
 
 from app.config.schema import AppConfig
 
+# Committed output extensions.
+#
+# i4Tools (爱思助手) matches a Live Photo pair with a CASE-SENSITIVE extension
+# check and silently skips anything it does not recognise - a bundle that is
+# byte-for-byte valid but written as "x.jpg + x.mov" never reaches the pairing
+# stage at all. Device exports are ".JPG" + ".MOV"; confirmed by an otherwise
+# identical 4-way import test where only this casing decided the outcome.
+# Everything that names a committed output must use these constants.
+OUTPUT_JPG_EXT = ".JPG"
+OUTPUT_MOV_EXT = ".MOV"
+
 # Steps that unconditionally re-encode the current file as JPEG.
 # live_photo is deliberately NOT here: its builder only copies the still into
 # a file named .jpg (app/core/live_photo/builder.py), so it inherits whatever
 # format the still had.
 JPEG_PRODUCING_STEPS = ("reencode", "rotate_crop", "hidden_image")
+
+
+def strip_jpg_ext(name: str) -> str:
+    """Drop a trailing .jpg/.JPG from a name, case-insensitively.
+
+    `naming` may include an extension and steps downstream may hand back an
+    output name; the stem has to be recovered before the Live Photo bundle
+    appends OUTPUT_JPG_EXT again.
+    """
+    if name.lower().endswith(OUTPUT_JPG_EXT.lower()):
+        return name[: -len(OUTPUT_JPG_EXT)]
+    return name
+
+
+def strip_mov_ext(name: str) -> str:
+    """Drop a trailing .mov/.MOV from a name, case-insensitively."""
+    if name.lower().endswith(OUTPUT_MOV_EXT.lower()):
+        return name[: -len(OUTPUT_MOV_EXT)]
+    return name
 
 
 def pipeline_produces_jpeg(config: AppConfig) -> bool:

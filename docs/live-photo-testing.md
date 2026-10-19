@@ -62,18 +62,52 @@ python -m pytest tests/integration/live_photo -q
 
 | 日期 | iPhone 机型 | iOS | Windows | Apple Devices | 本项目版本 | 本地动态 | AI 视频 | 结果 |
 |------|-------------|-----|---------|---------------|------------|----------|---------|------|
-| —    | —           | —   | —       | —             | —          | 未验证   | 未验证  | —    |
+| 2026-10-19 | iPhone 15 | 27.0.1 | 爱思助手 (Windows) | 未使用 | 0.4.0 | **通过** | 未验证 | 导入成功，照片显示为一张 Live Photo |
 
-当前状态：**Stage 1 已自动化；Stage 2 尚未在真实设备上验证**。
-在矩阵填写之前，README 与 GUI 中的 iPhone 导入能力一律显示为“需用户确认同步（未验证自动导入）”。
+当前状态：**Stage 1 已自动化；Stage 2 本地动态模式已在真实设备上验证通过**（2026-10-19，
+iPhone 15 / iOS 27.0.1，经爱思助手「导入实况照片」导入后在手机上显示为单张 Live Photo）。
+AI 视频模式仍未在真实设备上验证。
+
+> 该次验证是在 Windows 侧的**爱思助手**上完成的，没有用到 Apple Devices；
+> iCloud 照片开启时 Apple Devices 的同步不可用（见 `i4tools.py` 的研究结论）。
+> 导入仍需用户在爱思助手里手动选择目录并按提示操作，本项目不提供自动导入。
+
+### 定位过程（值得记住的一条）
+
+前几次验证一直失败，症状是「爱思助手报错或直接跳过」，产物与真机导出的其余部分
+逐字节对齐后仍然如此。用 2×2 对照实测才定位到：**爱思助手对扩展名做区分大小写的
+检查**，小写 `x.jpg` + `x.mov` 会在扫描阶段被跳过，根本没走到配对；大写 `x.JPG` +
+`x.MOV` 才被接受。音频轨格式（AAC 立体声 / PCM 单声道）在此不影响结果。
+
+所以产物扩展名由 `output_format.OUTPUT_JPG_EXT` / `OUTPUT_MOV_EXT` 统一决定，
+**必须是大写**；`tests/core/test_output_naming.py` 把这条钉死。
 
 ## 5. 实现说明（供排查）
 
+- **产物扩展名必须大写**：`.JPG` + `.MOV`。爱思助手对扩展名做区分大小写的检查，
+  小写会在扫描阶段被直接跳过。这是爱思助手导入失败的**首要**排查项——
+  其余部分逐字节对齐仍失败时，先看文件名。
 - Content Identifier：每次构建新生成 UUID（`metadata.new_asset_identifier`），
   写入照片 EXIF/ImageUniqueID 系标签 + MOV `content.identifier`；
   模板 UUID 永不复用。
-- `still-image-time`：写入 MOV（ExifTool QuickTime 键 + 追加的顶层 `uuid` box，
-  payload `{"content_identifier": …, "still_image_time_ms": 0}`，播放器可安全忽略）。
-  当前 still 点为视频第 0 帧（即最终静态图本身），保证静态/动态首帧一致。
+- `still-image-time`：MOV 内一条 mebx 定时元数据轨，样本为
+  `[size=9][localID=1][0xFF]`，与真机导出**逐字节相同**（值恒为 -1，
+  静帧时刻由样本自身时间戳 0 表达）。
+- MOV 结构对齐真机（参考文件：爱思助手从 iPhone 15 导出的一对）：
+  - 顶层 box 顺序 `ftyp → mdat → moov`。`normalize_movie` 本就按此输出，
+    但 `patch_mov_with_livephoto_tags` 里 ExifTool 会重写整个 MOV 并把 moov
+    挪到 mdat 前面，`moov_order.move_moov_after_mdat` 负责改回来——这样后续
+    拼接定时轨才真正走得到「无需改 stco」的那条路径（与设计意图一致）。
+  - `moov/meta` 除 `content.identifier` 外还写
+    `live-photo.auto=1`、`full-frame-rate-playback-intent=1`，
+    以及从静态图回读的 `make` / `model` / `software` / `creationdate`。
+  - QuickTime 电影头的 `CreateDate` / `ModifyDate` 取自静态图的
+    `DateTimeOriginal`，不再是 `0000:00:00`。
+- 有意**不**对齐的部分：真机另有 `location.ISO6709`、
+  `live-photo.vitality-score`、`video-orientation` 与 `live-photo-info`
+  两条 mebx 轨，JPEG 的 MakerNote 也带 51 项相机遥测（真机 1699 字节，
+  本项目 1 项 70 字节）。这些全部来自拍摄管线的传感器数据，伪造它们
+  只会让文件「像真的」而不会更对，且写错的风险高于收益——配对只依赖
+  ContentIdentifier 与 still-image-time，两者已与真机一致。
 - 本地动态：ffmpeg `zoompan` 轻微推镜（默认强度 0.06，3 秒，H.264/yuv420p/MOV，
   无音频，长边 ≤ 1920 不改变宽高比）。
