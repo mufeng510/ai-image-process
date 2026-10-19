@@ -157,6 +157,7 @@ device_metadata → rotate_crop → hidden_image → live_photo → output_write
 | `ui_language` | `zh-CN` | 界面语言（仅 GUI，CLI 不使用） |
 | `input.recurse_folders` | `false` | **是否递归扫描子目录** |
 | `input.extensions` | `jpg,jpeg,png,webp,tif,tiff,bmp` | 接受的扩展名白名单 |
+| `input.clear_after_run` | `true` | 处理完自动清空 GUI 里已选的文件/路径（仅 GUI，CLI 不使用） |
 | `output.directory` | `""` | 输出目录（`-o` 会覆盖它） |
 | `output.subfolder_per_run` | `true` | 每次任务建时间戳子文件夹 |
 | `output.conflict_policy` | `rename` | `overwrite` / `skip` / `rename` |

@@ -145,6 +145,10 @@ class StepsConfig:
 class InputConfig:
     recurse_folders: bool = False
     extensions: list[str] = field(default_factory=lambda: ["jpg", "jpeg", "png", "webp", "tif", "tiff", "bmp"])
+    # GUI only: drop the picked files/folders from the selection once a run
+    # finishes, so the next batch starts from an empty drop zone. Turn it off
+    # to keep the selection around (handy for re-running after a failure).
+    clear_after_run: bool = True
 
 
 @dataclass

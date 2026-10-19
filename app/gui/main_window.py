@@ -86,9 +86,18 @@ class MainWindow(QMainWindow):
         self.btn_add_folder.clicked.connect(self._add_folder)
         self.btn_clear = QPushButton("清空")
         self.btn_clear.clicked.connect(self._clear_inputs)
+        # Quick toggle next to the selection actions: clearing the picked
+        # files/folders after every run is what most people want when
+        # working through batches, but re-running the same batch after a
+        # failure needs them kept - so it lives here, not in the settings.
+        self.chk_clear_after = QCheckBox("处理后清空")
+        self.chk_clear_after.setToolTip(
+            "处理完成后自动清空已选择的文件/路径，方便直接添加下一批。\n"
+            "取消勾选则保留选择，便于失败后重跑同一批。")
         btn_row.addWidget(self.btn_add_files)
         btn_row.addWidget(self.btn_add_folder)
         btn_row.addWidget(self.btn_clear)
+        btn_row.addWidget(self.chk_clear_after)
         btn_row.addStretch(1)
         root.addLayout(btn_row)
 
@@ -212,6 +221,7 @@ class MainWindow(QMainWindow):
         self.out_edit.setText(self._config.output.directory)
         self.chk_auto_create.setChecked(self._config.output.auto_create_directory)
         self.chk_preserve.setChecked(self._config.output.preserve_originals)
+        self.chk_clear_after.setChecked(self._config.input.clear_after_run)
         self.chk_provenance.setChecked(self._config.steps.provenance_cleanup.enabled)
         self.chk_visible.setChecked(self._config.steps.visible_watermark.enabled)
         self.chk_reencode.setChecked(self._config.steps.reencode.enabled)
@@ -254,6 +264,7 @@ class MainWindow(QMainWindow):
         cfg.output.directory = self.out_edit.text().strip()
         cfg.output.auto_create_directory = self.chk_auto_create.isChecked()
         cfg.output.preserve_originals = self.chk_preserve.isChecked()
+        cfg.input.clear_after_run = self.chk_clear_after.isChecked()
         cfg.steps.provenance_cleanup.enabled = self.chk_provenance.isChecked()
         cfg.steps.visible_watermark.enabled = self.chk_visible.isChecked()
         cfg.steps.reencode.enabled = self.chk_reencode.isChecked()
@@ -302,6 +313,22 @@ class MainWindow(QMainWindow):
         self._inputs.clear()
         self.drop_zone.set_summary(0)
         self._append_log("已清空输入")
+
+    def _clear_inputs_after_run(self) -> None:
+        """Drop the selection once a run is over (if the toggle is on).
+
+        Only called for runs that actually processed something: a refused
+        preflight or a cancelled job leaves the selection alone, because the
+        user is most likely to want to fix and re-run exactly that batch.
+        """
+        if not self.chk_clear_after.isChecked():
+            return
+        if not self._inputs:
+            return
+        count = len(self._inputs)
+        self._inputs.clear()
+        self.drop_zone.set_summary(0)
+        self._append_log(f"已自动清空输入（{count} 个路径）")
 
     @Slot()
     def _choose_hidden(self) -> None:
@@ -461,6 +488,9 @@ class MainWindow(QMainWindow):
             self.lbl_status.setText(text)
             self._append_log(text)
             return
+        # The run really finished (files may have failed individually - that
+        # is still "处理完"), so the selection can go.
+        self._clear_inputs_after_run()
         self.progress.setValue(100)
         text = f"完成。成功 {result.success_count}，失败 {result.failure_count}"
         if out_dir is not None:
