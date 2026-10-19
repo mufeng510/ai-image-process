@@ -30,7 +30,6 @@ Tools/exiftool/exiftool
 Tools/exiftool/exiftool.pl
 Tools/exiftool/lib/
 Tools/exiftool/SOURCE-UNIX.txt
-Tools/perl/bin/
-Tools/perl/lib/
-Tools/perl/share/
-Tools/perl/SOURCE.txt
+# The whole tree is fetched by scripts/fetch_perl.sh, SOURCE.txt included.
+# Ignoring per-subdir left a gap that swallowed a stray copy of the tree.
+Tools/perl/

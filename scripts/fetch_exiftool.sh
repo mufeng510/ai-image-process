@@ -33,10 +33,7 @@ if [ -x "$DEST/exiftool" ] && [ -d "$DEST/lib" ]; then
   exit 0
 fi
 
-command -v perl >/dev/null 2>&1 || {
-  echo "[fetch_exiftool] perl is required to run ExifTool on unix" >&2
-  exit 1
-}
+
 
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT

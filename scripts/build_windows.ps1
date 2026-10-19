@@ -33,6 +33,24 @@ if (Test-Path "build\pyinstaller") { Remove-Item -Recurse -Force "build\pyinstal
 Copy-Item -Force LICENSE dist\AI-Image-Process\ -ErrorAction SilentlyContinue
 Copy-Item -Force README.md dist\AI-Image-Process\ -ErrorAction SilentlyContinue
 
+# Ship the agent skill, mirroring scripts/build_portable.sh. Without this the
+# Windows artifact is the only one whose CLI exists but that no agent can be
+# taught to drive -- and the release assertions check all three platforms, so a
+# gap here fails the build instead of shipping.
+$agentSkill = Join-Path $Root ".opencode\skills\ai-image-process\SKILL.md"
+if (Test-Path $agentSkill) {
+  New-Item -ItemType Directory -Force -Path "dist\AI-Image-Process\.opencode\skills" | Out-Null
+  Copy-Item -Recurse -Force (Split-Path -Parent $agentSkill) "dist\AI-Image-Process\.opencode\skills\"
+  New-Item -ItemType Directory -Force -Path "dist\AI-Image-Process\docs" | Out-Null
+  Copy-Item -Force "docs\agent-cli.md" "dist\AI-Image-Process\docs\"
+  New-Item -ItemType Directory -Force -Path "dist\AI-Image-Process\scripts" | Out-Null
+  Copy-Item -Force "scripts\install_agent_skill.sh" "dist\AI-Image-Process\scripts\"
+  Write-Host "[build] bundled agent skill"
+} else {
+  Write-Host "[build] WARNING: .opencode\skills\ai-image-process\SKILL.md not found;" `
+            "the artifact will ship without the agent skill"
+}
+
 $buildInfo = @"
 AI Image Process portable build
 platform: Windows
