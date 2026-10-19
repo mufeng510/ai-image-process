@@ -113,9 +113,14 @@ AI Provider `steps.live_photo.ai_video.*`、命名模板、冲突策略等）走
 Windows 上必须用 `-CLI` 这个入口：GUI 程序不持有控制台句柄，父级 shell
 抓不到它的 stdout。Linux/macOS 上两者行为一致。
 
-unix 版 ExifTool 是 perl 脚本，因此**系统需要 perl**（Windows 的
-`exiftool.exe` 是原生程序，无此要求）。缺少时状态面板会显示「未安装」，
-Live Photo 会在配对标识处失败。
+unix 版 ExifTool 是 perl 脚本，所以安装包**同时内置了一个自包含的 perl**
+（`Tools/perl`，14 MB 压缩），`Tools/exiftool/exiftool` 是个 sh wrapper，
+优先用它。因此 macOS 13+（苹果已移除 perl）和精简容器上也能开箱即用。
+开发环境请先跑 `scripts/fetch_perl.sh` 与 `scripts/fetch_exiftool.sh`。
+
+万一运行时仍不可用（手工删过文件、平台没有对应构建等），预检会**在写出任何
+文件之前**拦下并说明原因；「设置 → 外部运行时」里有「安装」按钮，可一键把
+便携 perl 与 ExifTool 装进用户目录，**不需要管理员权限**。
 
 版本来源：`app/version.py` 为唯一真实来源（当前 **0.3.0**），`pyproject.toml` 已对齐；
 请勿以 README 缓存版本为准。

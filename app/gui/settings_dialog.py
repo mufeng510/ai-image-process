@@ -82,6 +82,32 @@ class PipInstallWorker(QObject):
             self.failed.emit(self._feature, str(exc))
 
 
+class RuntimeInstallWorker(QObject):
+    """Installs an external runtime (ExifTool + its perl) off the UI thread."""
+
+    progress = Signal(str)  # one status line
+    ok = Signal(str)  # tool name
+    failed = Signal(str, str)  # tool name, error
+
+    def __init__(self, tool: str, portable_mode: bool = False,
+                 parent: QObject | None = None) -> None:
+        super().__init__(parent)
+        self._tool = tool
+        self._portable = portable_mode
+
+    @Slot()
+    def run(self) -> None:
+        try:
+            from app.core.runtime_install import install_runtime
+
+            install_runtime(
+                self._tool, log=self.progress.emit, portable_mode=self._portable
+            )
+            self.ok.emit(self._tool)
+        except Exception as exc:  # noqa: BLE001
+            self.failed.emit(self._tool, str(exc))
+
+
 class SettingsDialog(QDialog):
     """Edit AppConfig with full tabs and import/export/reset."""
 
@@ -92,6 +118,11 @@ class SettingsDialog(QDialog):
         self._devices: list[tuple[str, str]] = []  # (id, label)
         self._dl_thread: QThread | None = None
         self._dl_worker: ModelDownloadWorker | None = None
+        self._rt_thread: QThread | None = None
+        self._rt_worker: RuntimeInstallWorker | None = None
+        self._rt_tool = ""
+        self._rt_log: list[str] = []
+        self._rt_error = ""
         self._ins_thread: QThread | None = None
         self._ins_worker: PipInstallWorker | None = None
         self._ins_feature: str = ""
@@ -243,11 +274,24 @@ class SettingsDialog(QDialog):
                     self.lbl_runtime_ffprobe):
             lbl.setWordWrap(True)
             lbl.setStyleSheet("font-size:11px;")
-        rtf.addRow("ExifTool", self.lbl_runtime_exiftool)
+        self.btn_install_exiftool = QPushButton("安装")
+        self.btn_install_exiftool.setToolTip(
+            "把便携 perl 与 ExifTool 装到用户目录，无需管理员权限"
+        )
+        self.btn_install_exiftool.clicked.connect(
+            lambda: self._install_runtime_tool("exiftool")
+        )
+        exif_row = QHBoxLayout()
+        exif_row.addWidget(self.lbl_runtime_exiftool, 1)
+        exif_row.addWidget(self.btn_install_exiftool, 0)
+        exif_row_widget = QWidget()
+        exif_row_widget.setLayout(exif_row)
+        rtf.addRow("ExifTool", exif_row_widget)
         rtf.addRow("FFmpeg", self.lbl_runtime_ffmpeg)
         rtf.addRow("ffprobe", self.lbl_runtime_ffprobe)
         hint = QLabel("ExifTool 用于写入设备信息与 Live Photo 配对标识；FFmpeg 用于生成 Live Photo 动态。"
-                      "正式安装包已内置；此处显示缺失时，请安装对应工具后重启软件。")
+                      "正式安装包已内置。unix 版 ExifTool 是 perl 脚本，若本机缺 perl，"
+                      "点「安装」可自动补齐（不需要管理员权限）。")
         hint.setWordWrap(True)
         hint.setStyleSheet("color:#666;font-size:11px;")
         rtf.addRow(hint)
@@ -682,6 +726,104 @@ class SettingsDialog(QDialog):
                 label.setStyleSheet("color:#c53030;font-size:11px;")
                 label.setToolTip("")
 
+        # The install button only means something when something is missing --
+        # an always-live button next to a green check just invites clicks.
+        from app.core.runtime_install import diagnose as diagnose_runtime
+
+        problem = diagnose_runtime(
+            "exiftool", portable_mode=self._config.runtime.portable_mode
+        )
+        self.btn_install_exiftool.setEnabled(problem is not None)
+        if problem is None:
+            self.btn_install_exiftool.setToolTip("ExifTool 已可用")
+        else:
+            self.btn_install_exiftool.setToolTip(problem.detail)
+
+    # ----- external runtime installation (ExifTool + its perl) -----
+    def _install_runtime_tool(self, tool: str) -> None:
+        """Download a missing runtime into the per-user tools directory.
+
+        Mirrors the pip installer above: work happens on a thread, the dialog
+        stays usable, and a failure surfaces the manual command instead of a
+        traceback.
+        """
+        if self._busy():
+            QMessageBox.information(self, "任务进行中", "已有安装/下载任务正在进行，请稍候。")
+            return
+        self._rt_tool = tool
+        self._rt_log: list[str] = []
+        self._rt_error = ""
+        self._set_install_busy(True)
+        self.btn_install_exiftool.setText("安装中 …")
+        self._rt_thread = QThread(self)
+        self._rt_worker = RuntimeInstallWorker(tool, self._config.runtime.portable_mode)
+        self._rt_worker.moveToThread(self._rt_thread)
+        self._rt_thread.started.connect(self._rt_worker.run)
+        self._rt_worker.progress.connect(self._on_runtime_install_progress)
+        self._rt_worker.ok.connect(self._on_runtime_install_ok)
+        self._rt_worker.failed.connect(self._on_runtime_install_failed)
+        self._rt_worker.ok.connect(self._rt_thread.quit)
+        self._rt_worker.failed.connect(self._rt_thread.quit)
+        self._rt_thread.finished.connect(self._rt_worker.deleteLater)
+        self._rt_thread.finished.connect(self._on_runtime_install_finished)
+        self._rt_thread.start()
+
+    @Slot(str)
+    def _on_runtime_install_progress(self, line: str) -> None:
+        text = line.strip()
+        if text:
+            self._rt_log.append(text)
+
+    @Slot(str)
+    def _on_runtime_install_ok(self, tool: str) -> None:
+        self._rt_error = ""
+        self._refresh_runtime_status()
+        QMessageBox.information(
+            self, "安装成功",
+            "ExifTool 已安装完成，无需重启即可使用。\n"
+            "若之前有任务失败，现在可以重新开始。",
+        )
+
+    @Slot(str, str)
+    def _on_runtime_install_failed(self, tool: str, error: str) -> None:
+        from app.core.runtime_install import manual_install_command
+
+        self._rt_error = error.strip() or "未知错误"
+        manual = manual_install_command(
+            tool, portable_mode=self._config.runtime.portable_mode
+        )
+        short = self._rt_error if len(self._rt_error) <= 500 else self._rt_error[:500] + "…"
+        detail = ["---- 安装输出 ----\n" + "\n".join(self._rt_log[-100:]),
+                  "---- 错误 ----\n" + self._rt_error]
+        if manual:
+            detail.append("---- 手动安装 ----\n" + manual)
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Critical)
+        box.setWindowTitle("运行时安装失败")
+        box.setText("ExifTool 安装失败。")
+        box.setInformativeText(
+            f"原因：{short}\n\n（完整日志见「显示详情」，可选中复制）"
+            + (f"\n\n手动安装方法：\n{manual}" if manual else "")
+        )
+        box.setDetailedText("\n\n".join(detail))
+        copy_btn = None
+        if manual:
+            copy_btn = box.addButton("复制手动安装命令", QMessageBox.ButtonRole.ActionRole)
+        box.addButton(QMessageBox.StandardButton.Close)
+        box.exec()
+        if copy_btn is not None and box.clickedButton() == copy_btn:
+            clipboard = QGuiApplication.clipboard()
+            if clipboard is not None:
+                clipboard.setText(manual)
+
+    @Slot()
+    def _on_runtime_install_finished(self) -> None:
+        self._rt_thread = None
+        self._rt_worker = None
+        self._set_install_busy(False)
+        self.btn_install_exiftool.setText("安装")
+        self._refresh_runtime_status()
+
     # ----- in-app dependency installation -----
     def _install_status_label(self, feature: str) -> QLabel:
         return self.prov_status if feature == "provenance" else self.visible_status
@@ -690,19 +832,28 @@ class SettingsDialog(QDialog):
         return bool(
             (self._dl_thread is not None and self._dl_thread.isRunning())
             or (self._ins_thread is not None and self._ins_thread.isRunning())
+            or (self._rt_thread is not None and self._rt_thread.isRunning())
         )
 
     def _set_install_busy(self, busy: bool) -> None:
         # Never run pip and the model download concurrently: pip may be
-        # (re)installing the very package the download imports.
+        # (re)installing the very package the download imports. The runtime
+        # installer joins the list for the same reason and a sharper one --
+        # two of its threads unpacking into one directory manufacture the
+        # half-installed state it exists to repair.
         for btn in (
             self.btn_install_prov,
             self.btn_install_visible,
             self.btn_install_onnx,
             self.btn_dl_migan,
             self.btn_dl_lama,
+            self.btn_install_exiftool,
         ):
             btn.setEnabled(not busy)
+        if not busy:
+            # Re-enabling on "available" is _refresh_runtime_status's call; it
+            # knows whether there is still something to install.
+            self._refresh_runtime_status()
         if not busy:
             self._refresh_dependency_status()
 

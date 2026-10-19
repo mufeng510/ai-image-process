@@ -203,6 +203,32 @@ def run_preflight(
             except Exception:
                 hidden_metadata[src_str] = {}
 
+    # 3b. ExifTool must be usable, not merely present. It is the one runtime
+    # whose absence does not announce itself: device_metadata returns ok=True
+    # when the runner is missing, so the file lands with no Make/Model/ISO and
+    # is still recorded as a success, and Live Photo fails much later with
+    # "photo asset identifier missing" -- a symptom, not a cause. Refuse before
+    # anything is written instead. FFmpeg gets the same treatment just below.
+    if records:
+        needs_exiftool: list[str] = []
+        if config.steps.device_metadata.enabled:
+            needs_exiftool.append("「写入设备信息」")
+        if config.steps.live_photo.enabled:
+            needs_exiftool.append("「Live Photo」")
+        if needs_exiftool:
+            from app.core.runtime_install import diagnose as diagnose_runtime
+
+            problem = diagnose_runtime(
+                "exiftool", portable_mode=config.runtime.portable_mode
+            )
+            if problem is not None:
+                return PreflightResult(
+                    ok=False,
+                    error=problem.explain(needs_exiftool),
+                    extra={"runtime": "exiftool", "reason": problem.reason,
+                           "manual": problem.manual},
+                )
+
     # 4. live photo checks
     if live_on:
         from app.core.ffmpeg_resolver import resolve_ffmpeg
