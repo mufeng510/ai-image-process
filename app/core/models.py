@@ -138,6 +138,12 @@ class JobResult:
     preflight_failed: bool = False
     preflight_error: Optional[str] = None
     preflight_extra: dict[str, Any] = field(default_factory=dict)
+    # Set by run_job(dry_run=True): preflight passed, nothing was written.
+    # `planned_*` describe what a real run would have done, so a caller can
+    # show a plan without producing anything.
+    dry_run: bool = False
+    planned_output_dir: Optional[Path] = None
+    planned_input_count: int = 0
 
     @property
     def success_count(self) -> int:

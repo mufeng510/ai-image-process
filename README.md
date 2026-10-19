@@ -74,9 +74,27 @@ inputs                 输入文件和/或文件夹（必填，多个）
 --enable-live-photo    启用 Live Photo（可配 --video-source local_motion|ai_video）
 --list-steps           按顺序列出 Registry 步骤
 --prepare-iphone-import DIR  从本次输出准备 iPhone 同步目录并打印引导步骤
---json-summary         输出任务摘要 JSON（含 preflight_failed/preflight_error）
+--dry-run              只跑预检：报告将要处理的文件与输出目录，不写任何文件
+--json-summary         输出任务摘要 JSON（含 preflight_failed/preflight_error/outputs）
 --version              显示版本
 ```
+
+退出码：`0` 全部成功 · `1` 部分失败 · `2` 预检拦截（含输入路径不存在或无可处理图片）。
+
+### 给脚本 / Agent 调用
+
+`--json-summary` 时 **stdout 只有 JSON 文档**，进度与日志走 stderr，可直接管道：
+
+```bash
+.venv/bin/python -m app ./photos -o ./out --dry-run            # 先看计划，不落盘
+.venv/bin/python -m app ./photos -o ./out --json-summary \
+  | jq '{ok: (.failed == 0), files: [.outputs[].output]}'
+```
+
+摘要里的 `outputs` 逐条给出 `source` → `output`，产物恒为 `.jpg`，无需再扫目录。
+CLI 参数之外的配置（子目录递归 `input.recurse_folders`、并发 `runtime.worker_count`、
+AI Provider `steps.live_photo.ai_video.*`、命名模板、冲突策略等）走 `--config` JSON 覆盖，
+缺省字段沿用默认值。
 
 版本来源：`app/version.py` 为唯一真实来源（当前 **0.3.0**），`pyproject.toml` 已对齐；
 请勿以 README 缓存版本为准。

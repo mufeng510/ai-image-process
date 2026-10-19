@@ -80,12 +80,17 @@ def run_job(
     seed: int | None = None,
     registry: StepRegistry | None = None,
     temp_base: Path | None = None,
+    dry_run: bool = False,
 ) -> JobResult:
     """Run a full processing job.
 
     Cancel is cooperative and checked between files only (v1).
     Preflight runs before any output/deletion; failure returns
     JobResult(preflight_failed=True) with no side effects.
+
+    With dry_run=True the job stops right after a successful preflight and
+    reports what it would have done (JobResult.dry_run / planned_output_dir /
+    planned_input_count) without creating, encoding or deleting anything.
     """
     cancel_token = cancel_token or CancelToken()
     registry = registry or build_default_registry()
@@ -191,6 +196,23 @@ def run_job(
             rec.assigned_hidden_image = hpath
             rec.hidden_metadata_source = dict(preflight.hidden_metadata.get(str(rec.source_path), {}) or {})
     emit(ProgressKind.LOG, message="[Preflight] OK")
+
+    # Dry run stops exactly here: preflight passed, so the caller learns whether
+    # the job *could* run and where it *would* write, but nothing is claimed,
+    # encoded or deleted. Placing it before the run-folder claim is what keeps
+    # the promise "a dry run touches nothing".
+    if dry_run:
+        result.dry_run = True
+        result.planned_output_dir = out
+        result.planned_input_count = len(records)
+        emit(ProgressKind.LOG, message=f"[Dry run] would process {len(records)} file(s) into {out}")
+        emit(ProgressKind.JOB_FINISHED, message="dry run: nothing written")
+        if config.runtime.cleanup_temp_on_success:
+            try:
+                temp_mgr.cleanup_job(workspace)
+            except Exception:
+                pass
+        return result
 
     # Claim the run folder now that we know the job will run. Creating it
     # atomically (exist_ok=False) closes the window where two processes started
