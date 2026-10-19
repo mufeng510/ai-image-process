@@ -17,7 +17,16 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SKILL_ID="ai-image-process"
-DEST_BASE="${XDG_CONFIG_HOME:-$HOME/.config}/opencode/skills"
+# Where a global install lands. ~/.agents/skills is where the skill ecosystem
+# converges, and it is read by OpenCode, Claude Code, Cursor and Codex alike --
+# one copy works everywhere instead of only inside one harness. Overridable so
+# tests (and packagers) can redirect it.
+DEST_BASE="${AGENT_SKILLS_HOME:-${XDG_CONFIG_HOME:-$HOME/.config}/opencode/skills}"
+# With no AGENT_SKILLS_HOME, prefer the cross-agent location when its parent
+# already exists, else the OpenCode-native one.
+if [[ -z "${AGENT_SKILLS_HOME:-}" && -d "$HOME/.agents/skills" ]]; then
+  DEST_BASE="$HOME/.agents/skills"
+fi
 TARGET_DIR=""
 MODE="install"
 

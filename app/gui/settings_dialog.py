@@ -297,6 +297,49 @@ class SettingsDialog(QDialog):
         rtf.addRow(hint)
         layout.addWidget(rt_box)
 
+        # Agent integration. Nothing is installed from here: writing into
+        # another application's configuration is the user's call, so the panel
+        # only ever hands them the command to copy.
+        agent_box = QGroupBox("AI Agent 集成")
+        agf = QFormLayout(agent_box)
+        self.lbl_agent_skill = QLabel()
+        self.lbl_agent_skill.setWordWrap(True)
+        self.lbl_agent_skill.setStyleSheet("font-size:11px;")
+        self.lbl_agent_cli = QLabel()
+        self.lbl_agent_cli.setWordWrap(True)
+        self.lbl_agent_cli.setStyleSheet("color:#666;font-size:11px;")
+
+        self.btn_copy_install_cmd = QPushButton("复制安装指令")
+        self.btn_copy_install_cmd.setToolTip(
+            "复制一条命令，交给 Agent 执行即可完成安装"
+        )
+        self.btn_copy_install_cmd.clicked.connect(self._copy_agent_install_cmd)
+        self.btn_copy_agent_prompt = QPushButton("复制给 Agent 的话")
+        self.btn_copy_agent_prompt.setToolTip(
+            "复制一段可直接粘贴进 Agent 对话框的说明（含安装命令与校验步骤）"
+        )
+        self.btn_copy_agent_prompt.clicked.connect(self._copy_agent_prompt)
+
+        btn_row = QHBoxLayout()
+        btn_row.addWidget(self.btn_copy_install_cmd, 0)
+        btn_row.addWidget(self.btn_copy_agent_prompt, 0)
+        btn_row.addStretch(1)
+        btn_row_widget = QWidget()
+        btn_row_widget.setLayout(btn_row)
+
+        agf.addRow("Skill", self.lbl_agent_skill)
+        agf.addRow("命令行入口", self.lbl_agent_cli)
+        agf.addRow("安装", btn_row_widget)
+        agent_hint = QLabel(
+            "安装由你（或 Agent）执行，软件不会自行改动 Agent 的配置。"
+            "全局安装目录为 ~/.agents/skills，OpenCode、Claude Code、Cursor、"
+            "Codex 均可读取。"
+        )
+        agent_hint.setWordWrap(True)
+        agent_hint.setStyleSheet("color:#666;font-size:11px;")
+        agf.addRow(agent_hint)
+        layout.addWidget(agent_box)
+
         # Deduplication
         dedup = QGroupBox("文件去重")
         dpf = QFormLayout(dedup)
@@ -704,6 +747,65 @@ class SettingsDialog(QDialog):
         self._refresh_prov_status()
         self._refresh_visible_status()
         self._refresh_runtime_status()
+        self._refresh_agent_skill_status()
+
+    # ----- agent integration: describe the install, never perform it -----
+    def _refresh_agent_skill_status(self) -> None:
+        from app.core import agent_skill
+
+        headline, detail = agent_skill.status_text()
+        installed = agent_skill.is_installed()
+        self.lbl_agent_skill.setText(f"{headline}\n{detail}")
+        self.lbl_agent_skill.setStyleSheet(
+            ("color:#2f855a;" if installed else "color:#666;") + "font-size:11px;"
+        )
+        self.lbl_agent_cli.setText(agent_skill.cli_invocation())
+
+        available = bool(agent_skill.install_command())
+        self.btn_copy_install_cmd.setEnabled(available)
+        self.btn_copy_agent_prompt.setEnabled(available)
+        why = "本次构建未包含 Skill 文件" if not available else "复制后交给 Agent 执行"
+        self.btn_copy_install_cmd.setToolTip(why)
+        self.btn_copy_agent_prompt.setToolTip(why)
+
+    def _copy_agent_install_cmd(self) -> None:
+        from app.core import agent_skill
+
+        cmd = agent_skill.install_command()
+        if not cmd:
+            QMessageBox.warning(
+                self, "无法复制",
+                "本次构建没有包含 Skill 文件与安装脚本。\n"
+                "请重新下载便携包。",
+            )
+            return
+        clipboard = QGuiApplication.clipboard()
+        if clipboard is not None:
+            clipboard.setText(cmd)
+        QMessageBox.information(
+            self, "已复制",
+            f"已复制到剪贴板：\n\n{cmd}\n\n"
+            "把它粘给 Agent 让它执行，或自己在终端运行。",
+        )
+
+    def _copy_agent_prompt(self) -> None:
+        from app.core import agent_skill
+
+        text = agent_skill.agent_prompt()
+        if not text:
+            QMessageBox.warning(
+                self, "无法复制",
+                "本次构建没有包含 Skill 文件。\n请重新下载便携包。",
+            )
+            return
+        clipboard = QGuiApplication.clipboard()
+        if clipboard is not None:
+            clipboard.setText(text)
+        QMessageBox.information(
+            self, "已复制",
+            "已复制到剪贴板，直接粘贴进 Agent 的对话框即可。\n"
+            "内容包含安装命令、校验步骤，以及 Agent 之后该调用哪个入口。",
+        )
 
     def _refresh_runtime_status(self) -> None:
         """Show whether ExifTool / FFmpeg / ffprobe are actually usable."""

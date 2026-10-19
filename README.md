@@ -124,27 +124,30 @@ unix 版 ExifTool 是 perl 脚本，所以安装包**同时内置了一个自包
 
 ### 让 AI Agent 驱动 CLI
 
+**图形界面里就有**：设置 →「AI Agent 集成」面板，两个按钮把指令复制到剪贴板——
+「复制安装指令」给终端/Agent 执行，「复制给 Agent 的话」是一段可直接粘进对话框
+的说明（含安装命令、校验步骤、以及之后该调用哪个入口）。
+
+**软件不会自行往 Agent 的配置目录里写东西**——改不改是用户和 Agent 的决定，
+设置页只负责把命令给你。
+
+命令行等价物：
+
 ```bash
-scripts/install_agent_skill.sh            # 装到 ~/.config/opencode/skills/，全局可用
+scripts/install_agent_skill.sh            # 装到 ~/.agents/skills/，跨 Agent 通用
 scripts/install_agent_skill.sh --uninstall
 scripts/install_agent_skill.sh --print    # 只打印 SKILL.md，不落盘
 ```
-
-**在本仓库内工作无需安装**——`.opencode/skills/ai-image-process/` 会被自动发现。
-
-**便携包里也有**：解压后目录结构与仓库一致，因此
-
-```bash
-cd /解压出来的目录 && scripts/install_agent_skill.sh    # 同样能装
-```
-
-或者干脆直接在解压目录里打开 OpenCode，Skill 同样会被发现。
 
 装完在 OpenCode 里问「用 AI Image Process 处理 ./photos」即可，描述匹配时会
 自动加载；也可显式写 `@ai-image-process`。完整参考随 Skill 一起安装在
 `references/agent-cli.md`（仓库里对应 `docs/agent-cli.md`）：退出码语义、
 摘要 JSON 结构、全部配置键与默认值、可复制配方、排查表。
 `tests/core/test_agent_cli_docs.py` 会检查文档里提到的配置键真实存在。
+
+关于选型：本地工具就用 CLI + Skill，不需要再套一层 MCP——MCP 的位置是托管服务、
+需要 OAuth、客户端没有 shell 或跨调用有状态的场景，这里一条都不占。想用生态
+标准工具（需要 Node）也可以：`npx skills add <本地路径> -g -a opencode`。
 
 版本来源：`app/version.py` 为唯一真实来源（当前 **0.3.0**），`pyproject.toml` 已对齐；
 请勿以 README 缓存版本为准。
