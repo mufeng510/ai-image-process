@@ -2,7 +2,7 @@
 
 跨平台 AI 图片批量处理桌面客户端（Python / PySide6）。
 
-当前版本：**0.3.0**（见 `app/version.py`）
+当前版本：**0.4.0**（见 `app/version.py`）
 
 ## 功能
 
@@ -149,7 +149,7 @@ scripts/install_agent_skill.sh --print    # 只打印 SKILL.md，不落盘
 需要 OAuth、客户端没有 shell 或跨调用有状态的场景，这里一条都不占。想用生态
 标准工具（需要 Node）也可以：`npx skills add <本地路径> -g -a opencode`。
 
-版本来源：`app/version.py` 为唯一真实来源（当前 **0.3.0**），`pyproject.toml` 已对齐；
+版本来源：`app/version.py` 为唯一真实来源（当前 **0.4.0**），`pyproject.toml` 已对齐；
 请勿以 README 缓存版本为准。
 
 ## GUI
@@ -190,7 +190,7 @@ QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q tests/gui
 
 详见 [`build/README.md`](build/README.md)。GitHub Actions 全平台 release-blocking：
 
-- 推送到 `main` → 自动构建并发布 **prerelease**（tag 形如 `v0.3.0-build.<运行号>`）
+- 推送到 `main` → 自动构建并发布 **prerelease**（tag 形如 `v0.4.0-build.<运行号>`）
 - 推送 tag `v*` → 构建并发布**正式 Release**
 - 工作流：`.github/workflows/release.yml`（Windows / macOS / Ubuntu）；测试：`.github/workflows/ci.yml`
 
