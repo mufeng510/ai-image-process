@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Slot
+from PySide6.QtCore import QObject, QThread, Signal, Slot
 from PySide6.QtGui import QAction, QCloseEvent
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -56,6 +56,11 @@ class MainWindow(QMainWindow):
 
         self._inputs: list[Path] = []
         self._last_output_dir: Path | None = None
+        # 后台隐藏图片库扫描状态：避免构造时在 GUI 主线程同步完整解码
+        # 整个图片库（导致窗口迟迟不显示）。
+        self._scanner_thread: QThread | None = None
+        self._scanner: _HiddenLibraryScanner | None = None
+        self._scan_id = 0
         self._controller = PipelineController(self)
         self._controller.progress.connect(self._on_progress)
         self._controller.finished.connect(self._on_finished)
@@ -338,29 +343,71 @@ class MainWindow(QMainWindow):
             self._refresh_hidden_count()
 
     def _refresh_hidden_count(self) -> None:
-        from app.core.hidden_images import scan_hidden_library_detailed
+        """异步刷新隐藏图片库可用张数，不阻塞 GUI 主线程。
 
+        完整解码每张图很重：库文件多时同步扫描会把 MainWindow 构造
+        卡在主线程，导致双击打开后窗口迟迟不显示。因此扫描放在
+        后台线程，完成后再把结果派回 GUI 线程更新标签。
+        """
         lib = self.hidden_edit.text().strip()
         if not lib:
+            self._cancel_scanner()
             self.lbl_hidden_count.setText("可用图片：-")
             self.lbl_hidden_count.setToolTip("")
             return
-        try:
-            exts = set(self._config.input.extensions or ["jpg", "jpeg", "png", "webp"])
-            detailed = scan_hidden_library_detailed(
-                Path(lib), {e.lower().lstrip(".") for e in exts})
-            usable = [e for e in detailed if e.usable]
-            skipped = [e for e in detailed if not e.usable]
-            if skipped:
-                self.lbl_hidden_count.setText(
-                    f"可用图片：{len(usable)} 张（另有 {len(skipped)} 个不可用文件已过滤，悬停查看）")
-                self.lbl_hidden_count.setToolTip(
-                    "已过滤：\n" + "\n".join(f"{e.path.name}：{e.reason}" for e in skipped[:20]))
-            else:
-                self.lbl_hidden_count.setText(f"可用图片：{len(usable)} 张")
-                self.lbl_hidden_count.setToolTip("")
-        except Exception:  # noqa: BLE001
+        exts = {e.lower().lstrip(".") for e in (self._config.input.extensions or ["jpg", "jpeg", "png", "webp"])}
+        self.lbl_hidden_count.setText("可用图片：扫描中…")
+        self.lbl_hidden_count.setToolTip("")
+        # 已有扫描在进行时，textChanged 等高频触发不再重复提交任务。
+        if self._scanner_thread is not None and self._scanner_thread.isRunning():
+            return
+        self._start_scanner(Path(lib), exts)
+
+    def _start_scanner(self, library_dir: Path, exts: set[str]) -> None:
+        """在后台线程启动一次隐藏图片库扫描。"""
+        self._cancel_scanner()
+        self._scan_id += 1
+        scan_id = self._scan_id
+        thread = QThread(self)
+        scanner = _HiddenLibraryScanner(library_dir, exts, scan_id)
+        scanner.moveToThread(thread)
+        scanner.scanned.connect(self._on_hidden_scanned)
+        scanner.scanned.connect(thread.quit)
+        scanner.scanned.connect(scanner.deleteLater)
+        thread.finished.connect(thread.deleteLater)
+        self._scanner_thread = thread
+        self._scanner = scanner
+        thread.started.connect(scanner.run)
+        thread.start()
+
+    @Slot(int, object)
+    def _on_hidden_scanned(self, scan_id: int, result: object) -> None:
+        """GUI 线程回调：把后台扫描结果写回标签。过期结果直接丢弃。"""
+        if scan_id != self._scan_id:
+            return
+        self._scanner_thread = None
+        self._scanner = None
+        if result is None or not isinstance(result, list):
             self.lbl_hidden_count.setText("可用图片：读取失败")
+            self.lbl_hidden_count.setToolTip("")
+            return
+        usable = [e for e in result if e.usable]
+        skipped = [e for e in result if not e.usable]
+        if skipped:
+            self.lbl_hidden_count.setText(
+                f"可用图片：{len(usable)} 张（另有 {len(skipped)} 个不可用文件已过滤，悬停查看）")
+            self.lbl_hidden_count.setToolTip(
+                "已过滤：\n" + "\n".join(f"{e.path.name}：{e.reason}" for e in skipped[:20]))
+        else:
+            self.lbl_hidden_count.setText(f"可用图片：{len(usable)} 张")
+            self.lbl_hidden_count.setToolTip("")
+
+    def _cancel_scanner(self) -> None:
+        """请求停止正在进行的后台扫描（不阻塞主线程等待结束）。"""
+        if self._scanner_thread is not None and self._scanner_thread.isRunning():
+            self._scanner_thread.quit()
+        self._scanner_thread = None
+        self._scanner = None
 
     @Slot()
     def _choose_output(self) -> None:
@@ -556,8 +603,34 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "提示", "任务仍在运行，请先取消。")
             event.ignore()
             return
+        self._cancel_scanner()
         try:
             self._cfg_mgr.save(self._ui_to_config())
         except Exception:  # noqa: BLE001
             pass
         super().closeEvent(event)
+
+
+class _HiddenLibraryScanner(QObject):
+    """在后台线程扫描隐藏图片库，完成后把结果派回 GUI 线程。
+
+    故意不在 GUI 线程完整解码每张图：图片库文件多时同步扫描会把
+    MainWindow 构造卡在主线程，导致双击打开后窗口迟迟不显示。
+    """
+
+    scanned = Signal(int, object)  # (scan_id, list[HiddenScanEntry] | None)
+
+    def __init__(self, library_dir: Path, exts: set[str], scan_id: int) -> None:
+        super().__init__()
+        self._library_dir = library_dir
+        self._exts = exts
+        self._scan_id = scan_id
+
+    def run(self) -> None:
+        from app.core.hidden_images import scan_hidden_library_detailed
+
+        try:
+            result = scan_hidden_library_detailed(self._library_dir, self._exts)
+        except Exception:  # noqa: BLE001 - 扫描失败不应崩溃启动
+            result = None
+        self.scanned.emit(self._scan_id, result)

@@ -126,3 +126,60 @@ def test_settings_dependency_status_reflects_package_state(qapp):
     # onnx install button enabled only when the package exists but onnx is missing
     assert dlg.btn_install_onnx.isEnabled() == (st.importable and not st.onnx_ready)
     dlg.close()
+
+
+def test_main_window_construction_not_blocked_by_library_scan(qapp, tmp_path, monkeypatch):
+    """构造 MainWindow 时不得在 GUI 主线程同步扫描/完整解码整个隐藏图片库。
+
+    若库文件多，同步扫描会把构造卡在主线程，导致双击打开后窗口
+    迟迟不显示。扫描应在后台线程进行，构造本身必须快速返回。
+    """
+    import app.gui.main_window as mw
+    from app.config.manager import ConfigManager
+    from PIL import Image
+
+    cfg_path = tmp_path / "test-config.json"
+    lib_dir = tmp_path / "lib"
+    lib_dir.mkdir()
+    Image.new("RGB", (10, 10)).save(lib_dir / "a.jpg")
+    cfg_path.write_text(json.dumps({
+        "output": {"directory": str(tmp_path / "out"), "auto_create_directory": True,
+                   "preserve_originals": True},
+        "input": {"clear_after_run": False, "extensions": ["jpg", "jpeg", "png", "webp"]},
+        "steps": {
+            "provenance_cleanup": {"enabled": True},
+            "visible_watermark": {"enabled": False},
+            "reencode": {"enabled": True},
+            "device_metadata": {"enabled": False},
+            "rename": {"enabled": True},
+            "rotate_crop": {"enabled": False},
+            "hidden_image": {"enabled": True, "library_dir": str(lib_dir), "opacity": 0.02},
+            "live_photo": {"enabled": False},
+            "output_write": {"enabled": True},
+        },
+    }))
+    monkeypatch.setattr(mw, "ConfigManager", lambda *a, **k: ConfigManager(cfg_path))
+
+    # 把扫描打桩为“很慢”：模拟图片库文件多、完整解码耗时的场景。
+    from app.core import hidden_images as hi
+    import threading
+    released = threading.Event()
+    orig = hi.scan_hidden_library_detailed
+
+    def blocking_scan(lib, exts):
+        released.wait(timeout=5)
+        return orig(lib, exts)
+
+    monkeypatch.setattr(hi, "scan_hidden_library_detailed", blocking_scan)
+
+    import time
+    t0 = time.perf_counter()
+    win = MainWindow()
+    dt = time.perf_counter() - t0
+    released.set()  # 允许后台扫描线程结束
+
+    # 构造本身必须快速返回：不在主线程同步等待扫描完成。
+    assert dt < 2.0, f"MainWindow 构造耗时过长：{dt:.2f}s"
+    # 已启动后台扫描（非阻塞主线程）
+    assert win._scanner_thread is not None
+    win.close()

@@ -58,6 +58,17 @@ def test_main_window_toggles_and_hidden_count(qapp, tmp_path, monkeypatch):
 
     Image.new("RGB", (20, 20), (1, 2, 3)).save(lib / "h.jpg")
     win.hidden_edit.setText(str(lib))
+    # 扫描在后台线程进行，等待它完成并把结果派回 GUI 线程后再断言。
+    from PySide6.QtWidgets import QApplication
+    import time
+
+    app = QApplication.instance()
+    deadline = time.time() + 5
+    while time.time() < deadline:
+        app.processEvents()
+        if win._scanner_thread is None or not win._scanner_thread.isRunning():
+            break
+        time.sleep(0.02)
     assert "1" in win.lbl_hidden_count.text()
     win.close()
 
