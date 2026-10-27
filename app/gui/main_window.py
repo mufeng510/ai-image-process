@@ -1,9 +1,10 @@
 """Main application window."""
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QThread, Signal, Slot
+from PySide6.QtCore import QTimer, Slot
 from PySide6.QtGui import QAction, QCloseEvent
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -57,9 +58,13 @@ class MainWindow(QMainWindow):
         self._inputs: list[Path] = []
         self._last_output_dir: Path | None = None
         # 后台隐藏图片库扫描状态：避免构造时在 GUI 主线程同步完整解码
-        # 整个图片库（导致窗口迟迟不显示）。
-        self._scanner_thread: QThread | None = None
-        self._scanner: _HiddenLibraryScanner | None = None
+        # 整个图片库（导致窗口迟迟不显示）。扫描在 daemon 线程中进行，
+        # 结果通过 QTimer 在 GUI 线程回填，避免跨线程 Signal/Slot 在窗口
+        # 销毁时触发 PySide6 C++ 层面的 Aborted 崩溃。
+        self._scan_thread: threading.Thread | None = None
+        self._scan_timer: QTimer | None = None
+        self._scan_result: tuple[int, object] | None = None  # (scan_id, result)
+        self._scan_done = False
         self._scan_id = 0
         self._controller = PipelineController(self)
         self._controller.progress.connect(self._on_progress)
@@ -347,7 +352,8 @@ class MainWindow(QMainWindow):
 
         完整解码每张图很重：库文件多时同步扫描会把 MainWindow 构造
         卡在主线程，导致双击打开后窗口迟迟不显示。因此扫描放在
-        后台线程，完成后再把结果派回 GUI 线程更新标签。
+        后台 daemon 线程，结果通过 QTimer 在 GUI 线程回填，完全避免
+        跨线程 Signal/Slot 在窗口销毁时触发 PySide6 C++ 层面的崩溃。
         """
         lib = self.hidden_edit.text().strip()
         if not lib:
@@ -359,34 +365,61 @@ class MainWindow(QMainWindow):
         self.lbl_hidden_count.setText("可用图片：扫描中…")
         self.lbl_hidden_count.setToolTip("")
         # 已有扫描在进行时，textChanged 等高频触发不再重复提交任务。
-        if self._scanner_thread is not None and self._scanner_thread.isRunning():
+        if self._scan_thread is not None and self._scan_thread.is_alive():
             return
         self._start_scanner(Path(lib), exts)
 
     def _start_scanner(self, library_dir: Path, exts: set[str]) -> None:
-        """在后台线程启动一次隐藏图片库扫描。"""
+        """在后台 daemon 线程启动一次隐藏图片库扫描。
+
+        扫描本身不碰任何 Qt 对象；完成后把 (scan_id, result) 存在实例
+        属性上，由 _on_scan_timer 在 GUI 线程读取并回填到 UI。
+        """
         self._cancel_scanner()
         self._scan_id += 1
         scan_id = self._scan_id
-        thread = QThread(self)
-        scanner = _HiddenLibraryScanner(library_dir, exts, scan_id)
-        scanner.moveToThread(thread)
-        scanner.scanned.connect(self._on_hidden_scanned)
-        scanner.scanned.connect(thread.quit)
-        scanner.scanned.connect(scanner.deleteLater)
-        thread.finished.connect(thread.deleteLater)
-        self._scanner_thread = thread
-        self._scanner = scanner
-        thread.started.connect(scanner.run)
+        self._scan_result = None
+        self._scan_done = False
+
+        def _run() -> None:
+            from app.core.hidden_images import scan_hidden_library_detailed
+
+            try:
+                result = scan_hidden_library_detailed(library_dir, exts)
+            except Exception:  # noqa: BLE001 - 扫描失败不应崩溃启动
+                result = None
+            object.__setattr__(self, "_scan_result", (scan_id, result))
+            object.__setattr__(self, "_scan_done", True)
+
+        thread = threading.Thread(target=_run, daemon=True)
+        self._scan_thread = thread
         thread.start()
 
-    @Slot(int, object)
-    def _on_hidden_scanned(self, scan_id: int, result: object) -> None:
-        """GUI 线程回调：把后台扫描结果写回标签。过期结果直接丢弃。"""
-        if scan_id != self._scan_id:
+        # 用 QTimer 在 GUI 线程轮询扫描结果：QTimer 以 self 为 parent，
+        # 窗口销毁时定时器自动销毁，不会再触发回调，彻底规避跨线程
+        # Signal/Slot 在窗口销毁时导致的 Aborted 崩溃。
+        timer = QTimer(self)
+        timer.setSingleShot(False)
+        timer.timeout.connect(self._on_scan_timer)
+        timer.start(100)
+        self._scan_timer = timer
+
+    @Slot()
+    def _on_scan_timer(self) -> None:
+        """GUI 线程回调：轮询后台扫描结果，完成后回填到 UI。
+
+        QTimer 以 self 为 parent，窗口已销毁时定时器随之销毁，此槽
+        不会再被调用；其余防护条件再次确认不过期、未取消。
+        """
+        if not self._scan_done:
+            # 还未完成，继续轮询
             return
-        self._scanner_thread = None
-        self._scanner = None
+        scan_id, result = self._scan_result or (self._scan_id, None)
+        # 过期结果（已切换库目录或已取消）直接丢弃
+        if scan_id != self._scan_id:
+            self._cancel_scanner()
+            return
+        self._cancel_scanner()
         if result is None or not isinstance(result, list):
             self.lbl_hidden_count.setText("可用图片：读取失败")
             self.lbl_hidden_count.setToolTip("")
@@ -403,11 +436,15 @@ class MainWindow(QMainWindow):
             self.lbl_hidden_count.setToolTip("")
 
     def _cancel_scanner(self) -> None:
-        """请求停止正在进行的后台扫描（不阻塞主线程等待结束）。"""
-        if self._scanner_thread is not None and self._scanner_thread.isRunning():
-            self._scanner_thread.quit()
-        self._scanner_thread = None
-        self._scanner = None
+        """停止正在进行的后台扫描，并清理定时器与线程引用。
+
+        扫描线程为 daemon，主进程退出时会随之结束；这里不 terminate
+        （不安全），只是停止定时器并放弃引用，让线程自行结束。
+        """
+        if self._scan_timer is not None:
+            self._scan_timer.stop()
+            self._scan_timer = None
+        self._scan_thread = None
 
     @Slot()
     def _choose_output(self) -> None:
@@ -609,28 +646,3 @@ class MainWindow(QMainWindow):
         except Exception:  # noqa: BLE001
             pass
         super().closeEvent(event)
-
-
-class _HiddenLibraryScanner(QObject):
-    """在后台线程扫描隐藏图片库，完成后把结果派回 GUI 线程。
-
-    故意不在 GUI 线程完整解码每张图：图片库文件多时同步扫描会把
-    MainWindow 构造卡在主线程，导致双击打开后窗口迟迟不显示。
-    """
-
-    scanned = Signal(int, object)  # (scan_id, list[HiddenScanEntry] | None)
-
-    def __init__(self, library_dir: Path, exts: set[str], scan_id: int) -> None:
-        super().__init__()
-        self._library_dir = library_dir
-        self._exts = exts
-        self._scan_id = scan_id
-
-    def run(self) -> None:
-        from app.core.hidden_images import scan_hidden_library_detailed
-
-        try:
-            result = scan_hidden_library_detailed(self._library_dir, self._exts)
-        except Exception:  # noqa: BLE001 - 扫描失败不应崩溃启动
-            result = None
-        self.scanned.emit(self._scan_id, result)

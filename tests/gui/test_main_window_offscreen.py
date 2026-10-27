@@ -181,5 +181,5 @@ def test_main_window_construction_not_blocked_by_library_scan(qapp, tmp_path, mo
     # 构造本身必须快速返回：不在主线程同步等待扫描完成。
     assert dt < 2.0, f"MainWindow 构造耗时过长：{dt:.2f}s"
     # 已启动后台扫描（非阻塞主线程）
-    assert win._scanner_thread is not None
+    assert win._scan_thread is not None
     win.close()

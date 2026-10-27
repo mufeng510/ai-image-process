@@ -66,7 +66,13 @@ def test_main_window_toggles_and_hidden_count(qapp, tmp_path, monkeypatch):
     deadline = time.time() + 5
     while time.time() < deadline:
         app.processEvents()
-        if win._scanner_thread is None or not win._scanner_thread.isRunning():
+        if win._scan_done:
+            break
+        time.sleep(0.02)
+    # 让 QTimer 的 GUI 线程回调有机会把扫描结果回填到 UI
+    for _ in range(50):
+        app.processEvents()
+        if "扫描中…" not in win.lbl_hidden_count.text():
             break
         time.sleep(0.02)
     assert "1" in win.lbl_hidden_count.text()
