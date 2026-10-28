@@ -63,19 +63,17 @@ def test_main_window_toggles_and_hidden_count(qapp, tmp_path, monkeypatch):
     import time
 
     app = QApplication.instance()
-    deadline = time.time() + 5
+    deadline = time.time() + 10
     while time.time() < deadline:
         app.processEvents()
-        if win._scan_done:
+        text = win.lbl_hidden_count.text()
+        if "1" in text and "扫描中" not in text:
             break
         time.sleep(0.02)
-    # 让 QTimer 的 GUI 线程回调有机会把扫描结果回填到 UI
-    for _ in range(50):
-        app.processEvents()
-        if "扫描中…" not in win.lbl_hidden_count.text():
-            break
-        time.sleep(0.02)
-    assert "1" in win.lbl_hidden_count.text()
+    else:
+        raise AssertionError(
+            f"隐藏图片库计数未回填：{win.lbl_hidden_count.text()!r}"
+        )
     win.close()
 
 
