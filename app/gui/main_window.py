@@ -439,9 +439,15 @@ class MainWindow(QMainWindow):
         """停止正在进行的后台扫描，并清理定时器与线程引用。
 
         扫描线程为 daemon，主进程退出时会随之结束；这里不 terminate
-        （不安全），只是停止定时器并放弃引用，让线程自行结束。
+        （不安全），只是断开定时器信号、停止定时器并放弃引用，
+        避免窗口销毁后已排队的 timeout 回调访问已销毁的 C++ 对象
+        导致 PySide6 teardown 崩溃。
         """
         if self._scan_timer is not None:
+            try:
+                self._scan_timer.timeout.disconnect(self._on_scan_timer)
+            except TypeError:  # 连接可能已不存在
+                pass
             self._scan_timer.stop()
             self._scan_timer = None
         self._scan_thread = None
