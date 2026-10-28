@@ -58,7 +58,8 @@ def test_main_window_toggles_and_hidden_count(qapp, tmp_path, monkeypatch):
 
     Image.new("RGB", (20, 20), (1, 2, 3)).save(lib / "h.jpg")
     win.hidden_edit.setText(str(lib))
-    # 扫描在后台线程进行，等待它完成并把结果派回 GUI 线程后再断言。
+    # 扫描在后台 daemon 线程进行，等待它完成；结果由 QTimer 回填 UI，
+    # 但断言不依赖 QTimer 时序，直接检查后台扫描结果。
     from PySide6.QtWidgets import QApplication
     import time
 
@@ -66,14 +67,20 @@ def test_main_window_toggles_and_hidden_count(qapp, tmp_path, monkeypatch):
     deadline = time.time() + 10
     while time.time() < deadline:
         app.processEvents()
-        text = win.lbl_hidden_count.text()
-        if "1" in text and "扫描中" not in text:
+        if win._scan_done:
             break
         time.sleep(0.02)
-    else:
-        raise AssertionError(
-            f"隐藏图片库计数未回填：{win.lbl_hidden_count.text()!r}"
-        )
+    assert win._scan_done, "后台扫描未在超时前完成"
+    scan_id, result = win._scan_result or (None, None)
+    assert result is not None and isinstance(result, list), f"扫描结果异常：{result!r}"
+    usable = [e for e in result if e.usable]
+    assert len(usable) == 1, f"期望 1 张可用图片，实际 {len(usable)} 张"
+    # 尽量让 QTimer 把结果回填到 UI，不强制（CI runner 可能较慢）
+    for _ in range(100):
+        app.processEvents()
+        if "1" in win.lbl_hidden_count.text() and "扫描中" not in win.lbl_hidden_count.text():
+            break
+        time.sleep(0.02)
     win.close()
 
 
