@@ -79,6 +79,10 @@ def test_main_window_toggles_and_hidden_count(qapp, tmp_path, monkeypatch):
     win._on_scan_timer()
     assert "1" in win.lbl_hidden_count.text() and "扫描中" not in win.lbl_hidden_count.text()
     win.close()
+    # 显式等待后台扫描线程结束，避免 pytest 退出时 daemon 线程导致
+    # PySide6 teardown 崩溃（CI runner 上尤为明显）。
+    if win._scan_thread is not None:
+        win._scan_thread.join(timeout=2)
 
 
 def test_settings_rotate_validation(qapp):
