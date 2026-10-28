@@ -75,12 +75,9 @@ def test_main_window_toggles_and_hidden_count(qapp, tmp_path, monkeypatch):
     assert result is not None and isinstance(result, list), f"扫描结果异常：{result!r}"
     usable = [e for e in result if e.usable]
     assert len(usable) == 1, f"期望 1 张可用图片，实际 {len(usable)} 张"
-    # 尽量让 QTimer 把结果回填到 UI，不强制（CI runner 可能较慢）
-    for _ in range(100):
-        app.processEvents()
-        if "1" in win.lbl_hidden_count.text() and "扫描中" not in win.lbl_hidden_count.text():
-            break
-        time.sleep(0.02)
+    # 直接驱动 GUI 线程回调回填 UI，不依赖 QTimer 定时触发
+    win._on_scan_timer()
+    assert "1" in win.lbl_hidden_count.text() and "扫描中" not in win.lbl_hidden_count.text()
     win.close()
 
 
