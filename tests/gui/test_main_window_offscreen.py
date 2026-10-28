@@ -183,3 +183,7 @@ def test_main_window_construction_not_blocked_by_library_scan(qapp, tmp_path, mo
     # 已启动后台扫描（非阻塞主线程）
     assert win._scan_thread is not None
     win.close()
+    # 显式等待后台扫描线程结束，避免 pytest 退出时 daemon 线程导致
+    # PySide6 teardown 崩溃。
+    if win._scan_thread is not None:
+        win._scan_thread.join(timeout=2)
