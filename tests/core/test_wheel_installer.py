@@ -216,7 +216,7 @@ def test_fetch_wheel_sha256_ok(tmp_path: Path):
     content = b"hello wheel"
     sha256 = hashlib.sha256(content).hexdigest()
 
-    def mock_urlopen(req, timeout=None):
+    def mock_urlopen(req, timeout=None, context=None):
         class Resp:
             def __init__(self):
                 self._done = False
@@ -242,7 +242,7 @@ def test_fetch_wheel_sha256_mismatch_raises(tmp_path: Path):
     content = b"hello wheel"
     wrong_sha256 = "0" * 64
 
-    def mock_urlopen(req, timeout=None):
+    def mock_urlopen(req, timeout=None, context=None):
         class Resp:
             def __init__(self):
                 self._done = False
@@ -270,7 +270,7 @@ def test_fetch_wheel_atomic_no_leftover_tmp_on_success(tmp_path: Path):
     content = b"hello wheel"
     sha256 = hashlib.sha256(content).hexdigest()
 
-    def mock_urlopen(req, timeout=None):
+    def mock_urlopen(req, timeout=None, context=None):
         class Resp:
             def __init__(self):
                 self._done = False

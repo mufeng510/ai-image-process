@@ -53,9 +53,12 @@ ERROR_TAIL_CHARS = 2000
 
 
 def manual_install_command(specs: list[str]) -> str:
-    """返回用户可手动执行的安装命令（含引号，处理 extra 写法）。"""
+    """返回用户可手动执行的安装命令（含引号，处理 extra 写法）。
+
+    默认使用中国大陆境内可访问的清华 PyPI 镜像。
+    """
     quoted = " ".join(f'"{s}"' for s in specs)
-    return f"pip install {quoted}"
+    return f'pip install -i https://pypi.tuna.tsinghua.edu.cn/simple {quoted}'
 
 
 def feature_spec(feature: str) -> str:
@@ -158,6 +161,9 @@ def _pip_common_args() -> list[str]:
         "install",
         "--disable-pip-version-check",
         "--no-input",
+        # 中国大陆境内用户默认使用清华 PyPI 镜像，避免官方源 SSL/连接问题。
+        "-i",
+        "https://pypi.tuna.tsinghua.edu.cn/simple",
     ]
 
 
