@@ -388,8 +388,8 @@ class MainWindow(QMainWindow):
                 result = scan_hidden_library_detailed(library_dir, exts)
             except Exception:  # noqa: BLE001 - 扫描失败不应崩溃启动
                 result = None
-            object.__setattr__(self, "_scan_result", (scan_id, result))
-            object.__setattr__(self, "_scan_done", True)
+            self._scan_result = (scan_id, result)
+            self._scan_done = True
 
         thread = threading.Thread(target=_run, daemon=True)
         self._scan_thread = thread
