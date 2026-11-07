@@ -151,6 +151,8 @@ def test_step_independent_off(tmp_path):
     cfg.steps.provenance_cleanup.enabled = False
     cfg.steps.device_metadata.enabled = False
     cfg.steps.rotate_crop.enabled = False
+    cfg.steps.hidden_image.enabled = False
+    cfg.steps.live_photo.enabled = False
     cfg.paths.temp_dir = str(tmp_path / "tmp")
     r = run_job(cfg, [src], output_dir=out, seed=1, temp_base=tmp_path / "tmp")
     assert r.failure_count == 0 and r.success_count == 1

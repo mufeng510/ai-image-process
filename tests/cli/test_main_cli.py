@@ -57,6 +57,8 @@ def _config_file(tmp_path: Path) -> Path:
     cfg = default_config()
     cfg.steps.provenance_cleanup.enabled = False  # needs remove_ai_watermarks
     cfg.steps.device_metadata.enabled = False      # needs exiftool
+    cfg.steps.hidden_image.enabled = False          # needs a configured library
+    cfg.steps.live_photo.enabled = False            # needs ffmpeg
     cfg.paths.temp_dir = str(tmp_path / "tmp")
     path = tmp_path / "config.json"
     path.write_text(json.dumps(cfg.to_dict(), ensure_ascii=False), encoding="utf-8")
@@ -68,6 +70,8 @@ def _pipeline_config(tmp_path: Path):
     cfg = default_config()
     cfg.steps.provenance_cleanup.enabled = False
     cfg.steps.device_metadata.enabled = False
+    cfg.steps.hidden_image.enabled = False
+    cfg.steps.live_photo.enabled = False
     cfg.paths.temp_dir = str(tmp_path / "tmp")
     return cfg
 

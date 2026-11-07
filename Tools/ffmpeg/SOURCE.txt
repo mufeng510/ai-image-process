@@ -1,6 +1,8 @@
 source: PyPI imageio-ffmpeg==0.6.0 (imageio_ffmpeg-0.6.0-py3-none-win_amd64.whl -> imageio_ffmpeg/binaries/ffmpeg-win-x86_64-v7.1.exe)
 ffmpeg_version_line: ffmpeg version 7.1-essentials_build-www.gyan.dev Copyright (c) 2000-2024 the FFmpeg developers
 encoders: libx264 present (verified in build configuration)
-ffprobe: not bundled by this source; app runs without ffprobe (validator BMFF fallback), prefers PATH ffprobe when present
-license: GPL static build (--enable-gpl). Release obligations in build/README.md.
-fetched_utc: 2026-09-25T10:00:00Z
+ffprobe: BtbN FFmpeg-Builds autobuild-2026-11-06-12-50, asset ffmpeg-n9.0.2-47-gb204e94e90-win64-lgpl-9.0.zip (bin/ffprobe.exe only)
+ffprobe_sha256: 79ad3182440661596a0857f5fb86a487be8bda777c7001bef8460c9b3cac867b (verified against the tag's checksums.sha256)
+ffprobe_license: LGPL static build (n9.0.2-47-gb204e94e90); probes files produced by the bundled gyan/imageio ffmpeg 7.1 without issue
+license: GPL static build (--enable-gpl); ffprobe side is LGPL (see https://github.com/BtbN/FFmpeg-Builds for build licenses; release obligations in build/README.md)
+fetched_utc: 2026-11-07T00:00:00Z (ffmpeg re-extracted from imageio-ffmpeg==0.6.0; ffprobe added from BtbN autobuild-2026-11-06-12-50)

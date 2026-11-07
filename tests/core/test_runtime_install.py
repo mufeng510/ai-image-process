@@ -16,11 +16,14 @@ from __future__ import annotations
 import hashlib
 import platform
 import shutil
+import sys
 import tarfile
 import tempfile
 import urllib.request
 from pathlib import Path
 from types import SimpleNamespace
+
+_IS_WIN = sys.platform.startswith("win")
 
 import pytest
 
@@ -564,6 +567,8 @@ def test_install_runtime_is_a_noop_when_the_tool_already_works(monkeypatch, tmp_
 
 def test_install_runtime_refuses_when_the_platform_has_no_perl_asset(monkeypatch, tmp_path):
     """No portable perl for this platform: say what to run by hand, install nothing."""
+    # Windows takes a different branch; this test exercises the unix one.
+    monkeypatch.setattr(platform, "system", lambda: "Linux")
     monkeypatch.setattr(ri, "diagnose", lambda *a, **k: _problem(asset=""))
     # install_runtime consults _platform_asset directly as well as the diagnosis,
     # so both have to say "this platform has none".
@@ -586,6 +591,8 @@ def test_install_runtime_installs_perl_before_exiftool(tmp_path, monkeypatch):
     and looks like the very problem we are trying to fix.
     """
     targets: list[Path] = []
+    # Windows takes a different branch; this test exercises the unix one.
+    monkeypatch.setattr(platform, "system", lambda: "Linux")
     monkeypatch.setattr(ri, "_install_perl", lambda target, log: targets.append(target))
     monkeypatch.setattr(ri, "_install_exiftool_unix", lambda target, log: targets.append(target))
     monkeypatch.setattr(ri, "user_install_dir", lambda tool, portable_mode=False: tmp_path / tool)
@@ -610,6 +617,8 @@ def test_install_runtime_reports_when_exiftool_is_still_unusable(tmp_path, monke
     The message carries the post-install diagnosis, which is the only way the
     user learns that the perl they just got is still not being picked up.
     """
+    # Windows takes a different branch; this test exercises the unix one.
+    monkeypatch.setattr(platform, "system", lambda: "Linux")
     monkeypatch.setattr(ri, "_install_perl", lambda target, log: None)
     monkeypatch.setattr(ri, "_install_exiftool_unix", lambda target, log: None)
     monkeypatch.setattr(ri, "user_install_dir", lambda tool, portable_mode=False: tmp_path / tool)
@@ -632,6 +641,8 @@ def test_install_runtime_skips_the_recheck_when_verify_is_off(tmp_path, monkeypa
     only shows up after a restart. The flag is named `verify`, not
     `timeout_check`: there is no timeout anywhere in the install path.
     """
+    # Windows takes a different branch; this test exercises the unix one.
+    monkeypatch.setattr(platform, "system", lambda: "Linux")
     monkeypatch.setattr(ri, "_install_perl", lambda target, log: None)
     monkeypatch.setattr(ri, "_install_exiftool_unix", lambda target, log: None)
     monkeypatch.setattr(ri, "user_install_dir", lambda tool, portable_mode=False: tmp_path / tool)
@@ -742,8 +753,9 @@ def test_install_perl_unpacks_the_tree_and_marks_binaries_executable(tmp_path, m
     assert urls == [f"{PERL_RELEASE_BASE}/{PERL_ASSET}"]
     assert (target / "bin" / "perl").is_file()
     assert (target / "bin" / "cpanm").is_file()
-    for name in ("perl", "cpanm"):
-        assert (target / "bin" / name).stat().st_mode & 0o111, f"{name} is not executable"
+    if not _IS_WIN:  # exec bits do not exist on Windows
+        for name in ("perl", "cpanm"):
+            assert (target / "bin" / name).stat().st_mode & 0o111, f"{name} is not executable"
     assert "stale" not in (target / "bin" / "perl").read_text(encoding="utf-8")
     assert any(PERL_ASSET in line for line in lines)
 
@@ -811,8 +823,10 @@ def test_installed_exiftool_is_a_runnable_wrapper_with_its_library(tmp_path, mon
     ri._install_exiftool_unix(target, lambda _l: None)
 
     wrapper = target / "exiftool"
-    assert wrapper.is_file() and wrapper.stat().st_mode & 0o111
-    assert (target / "exiftool.pl").stat().st_mode & 0o111
+    assert wrapper.is_file()
+    if not _IS_WIN:  # exec bits do not exist on Windows
+        assert wrapper.stat().st_mode & 0o111
+        assert (target / "exiftool.pl").stat().st_mode & 0o111
     assert (target / "lib" / "Image" / "ExifTool.pm").is_file()
     # bundled perl first, host perl second: the same order scripts/fetch_exiftool.sh uses
     body = wrapper.read_text(encoding="utf-8")

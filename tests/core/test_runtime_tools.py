@@ -26,13 +26,17 @@ _BUNDLED_EXIFTOOL = (Path(__file__).resolve().parents[2] / "Tools" / "exiftool"
                      / ("exiftool.exe" if _WIN else "exiftool"))
 
 def _binary(path: Path) -> Path:
-    """A file that passes _looks_runnable on both unix and Windows."""
+    """An executable file name for this platform (plain name on unix, .exe on Windows)."""
+    if sys.platform.startswith("win") and not path.suffix:
+        path = path.with_suffix(".exe")
     path.write_bytes(b"fake-binary")
     path.chmod(0o755)
     return path
 
 def _script(path: Path, output: str = "9.9.9") -> Path:
     """An executable printing `output` whatever args it is given."""
+    if sys.platform.startswith("win") and not path.suffix:
+        path = path.with_suffix(".exe")
     path.write_text(f'#!/bin/sh\necho "{output}"\n', encoding="utf-8")
     path.chmod(0o755)
     return path

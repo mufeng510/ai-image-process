@@ -15,10 +15,17 @@ def _img(p: Path, color=(9, 9, 9)):
     Image.new("RGB", (32, 32), color).save(p)
 
 
+def _disable_env_steps(cfg):
+    cfg.steps.provenance_cleanup.enabled = False
+    cfg.steps.hidden_image.enabled = False
+    cfg.steps.live_photo.enabled = False
+
+
 def test_basenames_shared_and_unique(tmp_path):
     src = tmp_path / "in"; src.mkdir()
     _img(src / "a.jpg", color=(9, 9, 9)); _img(src / "b.jpg", color=(10, 11, 12))
     cfg = default_config()
+    _disable_env_steps(cfg)
     cfg.naming.template = "IMG_{number}"
     recs = to_records(collect_inputs([src], cfg))
     recs, _ = deduplicate_records(recs, "md5")
@@ -30,6 +37,7 @@ def test_basenames_shared_and_unique(tmp_path):
 def test_empty_task_not_blocked_by_empty_library(tmp_path):
     src = tmp_path / "in"; src.mkdir()
     cfg = default_config()
+    cfg.steps.live_photo.enabled = False  # records are empty, but this gate is not
     cfg.steps.hidden_image.enabled = True
     cfg.steps.hidden_image.library_dir = str(tmp_path / "lib")
     pf = run_preflight(cfg, [src], [], tmp_path / "out", random.Random(0))
@@ -40,7 +48,7 @@ def test_hidden_off_skips_library_checks(tmp_path):
     src = tmp_path / "in"; src.mkdir()
     _img(src / "a.jpg")
     cfg = default_config()
-    cfg.steps.hidden_image.enabled = False
+    _disable_env_steps(cfg)
     cfg.steps.hidden_image.library_dir = "/nonexistent"
     recs = to_records(collect_inputs([src], cfg))
     pf = run_preflight(cfg, [src], recs, tmp_path / "out", random.Random(0))
@@ -53,6 +61,8 @@ def test_live_photo_local_requires_ffmpeg_or_ok(tmp_path, monkeypatch):
     src = tmp_path / "in"; src.mkdir()
     _img(src / "a.jpg", color=(1, 2, 3))
     cfg = default_config()
+    cfg.steps.provenance_cleanup.enabled = False
+    cfg.steps.hidden_image.enabled = False
     cfg.steps.live_photo.enabled = True
     cfg.steps.live_photo.video_source = "local_motion"
     recs = to_records(collect_inputs([src], cfg))
@@ -79,8 +89,10 @@ def test_symlinked_input_into_library_refused(tmp_path):
     except OSError:
         pytest.skip("symlinks unavailable")
     cfg = default_config()
+    cfg.steps.provenance_cleanup.enabled = False
     cfg.steps.hidden_image.enabled = True
     cfg.steps.hidden_image.library_dir = str(lib)
+    cfg.steps.live_photo.enabled = False
     recs = to_records(collect_inputs([linkdir], cfg))
     assert len(recs) == 1
     pf = run_preflight(cfg, [linkdir], recs, tmp_path / "out", random.Random(0))
@@ -92,6 +104,7 @@ def test_rename_off_keeps_original_stems(tmp_path):
     _img(src / "a_keep.jpg", color=(1, 2, 3))
     _img(src / "b_keep.jpg", color=(4, 5, 6))
     cfg = default_config()
+    _disable_env_steps(cfg)
     cfg.steps.rename.enabled = False
     cfg.naming.template = "SHOULD_NOT_APPLY_{number}"
     recs = to_records(collect_inputs([src], cfg))
@@ -104,6 +117,8 @@ def test_ai_mode_requires_provider_config(tmp_path):
     src = tmp_path / "in"; src.mkdir()
     _img(src / "a.jpg")
     cfg = default_config()
+    cfg.steps.provenance_cleanup.enabled = False
+    cfg.steps.hidden_image.enabled = False
     cfg.steps.live_photo.enabled = True
     cfg.steps.live_photo.video_source = "ai_video"
     recs = to_records(collect_inputs([src], cfg))

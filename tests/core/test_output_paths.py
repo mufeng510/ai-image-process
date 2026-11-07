@@ -66,7 +66,10 @@ def test_per_run_false_returns_the_root_verbatim(tmp_path, preexisting):
 
 
 def test_resolve_run_folder_expands_user_home(monkeypatch, tmp_path):
+    # Windows' expanduser() reads USERPROFILE (HOMEDRIVE/HOMEPATH as fallback),
+    # never HOME — pin both or this only holds on POSIX.
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
     assert resolve_run_folder("~/exports", when=WHEN) == tmp_path / "exports" / STAMP
 
 
@@ -97,10 +100,11 @@ def test_from_dict_keeps_subfolder_per_run(stored, expected):
 
 
 def _config(tmp_path: Path, **flags):
-    """default_config() minus the two steps that need optional binaries."""
+    """default_config() minus the steps that need optional external binaries/libraries."""
     cfg = default_config()
     cfg.steps.provenance_cleanup.enabled = False
     cfg.steps.device_metadata.enabled = False
+    cfg.steps.live_photo.enabled = False
     cfg.output.subfolder_per_run = flags.get("subfolder", True)
     cfg.output.auto_create_directory = flags.get("auto_create", True)
     cfg.steps.hidden_image.enabled = flags.get("hidden", False)

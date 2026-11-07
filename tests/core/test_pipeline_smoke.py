@@ -15,10 +15,12 @@ def test_pipeline_smoke(tmp_path: Path):
     Image.new("RGB", (64, 64), color=(20, 40, 60)).save(img)
 
     cfg = default_config()
-    cfg.steps.provenance_cleanup.enabled = False  # optional dep
-    cfg.steps.device_metadata.enabled = False  # may lack exiftool on linux CI
-    cfg.runtime.cleanup_temp_on_success = True
+    cfg.steps.provenance_cleanup.enabled = False
+    cfg.steps.device_metadata.enabled = False
+    cfg.steps.live_photo.enabled = False
+    cfg.steps.hidden_image.enabled = False
     cfg.output.subfolder_per_run = False  # see tests/core/test_output_paths.py
+    cfg.runtime.cleanup_temp_on_success = True
     cfg.paths.temp_dir = str(tmp_path / "tmp")
 
     result = run_job(cfg, [src], output_dir=out, seed=42, temp_base=tmp_path / "tmp")

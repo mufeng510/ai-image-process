@@ -98,16 +98,10 @@ fi
 # The description is what an agent matches on; an empty or missing one means the
 # skill exists but is never advertised. Fail loudly rather than shipping a
 # silently dead install.
-if ! python3 - "$DEST/SKILL.md" <<'PY' 2>/dev/null
-import re, sys
-text = open(sys.argv[1], encoding="utf-8").read()
-m = re.match(r"^---\n(.*?)\n---\n", text, re.S)
-if not m:
-    sys.exit(1)
-for field in ("name:", "description:"):
-    if field not in m.group(1):
-        sys.exit(1)
-PY
+# No python3 dependency: git-bash and minimal unix boxes do not ship one.
+if ! head -n 1 "$DEST/SKILL.md" | grep -q '^---' \
+   || ! sed -n '/^---$/,/^---$/p' "$DEST/SKILL.md" | grep -q '^name:' \
+   || ! sed -n '/^---$/,/^---$/p' "$DEST/SKILL.md" | grep -q '^description:'
 then
   echo "[skill] installed, but SKILL.md frontmatter looks wrong (need name + description)" >&2
   exit 1

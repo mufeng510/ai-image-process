@@ -33,6 +33,10 @@ def _base_cfg(tmp_path, lib=None):
     # has its own coverage in tests/core/test_output_paths.py.
     cfg.output.subfolder_per_run = False
     cfg.paths.temp_dir = str(tmp_path / "tmp")
+    # The live-photo tests enable it explicitly; everywhere else it (and the
+    # hidden-image library) would just fail preflight for missing runtimes.
+    cfg.steps.hidden_image.enabled = False
+    cfg.steps.live_photo.enabled = False
     return cfg, src, out
 
 
@@ -64,7 +68,8 @@ def test_step_combos_without_livephoto(tmp_path, rotate, hidden):
     assert list(out.glob(f"*{OUTPUT_MOV_EXT}")) == []
 
 
-def test_defaults_off_regression_matches_legacy(tmp_path):
+def test_legacy_defaults_off_combo_still_works(tmp_path):
+    """The new default-on steps switched off: the old default combo must still run."""
     cfg, src, out = _base_cfg(tmp_path)
     cfg.steps.device_metadata.enabled = False
     _img(src / "a.png")
@@ -145,10 +150,20 @@ def test_rename_after_dedup_shared_stem(tmp_path):
 
 
 def test_cli_summary_flags(tmp_path):
+    import json as _json
+
     from app.main_cli import main
 
     src = tmp_path / "in"; out = tmp_path / "out"
     src.mkdir(); out.mkdir()
     _img(src / "a.jpg")
-    rc = main([str(src), "-o", str(out), "--json-summary"])
+    cfg = default_config()
+    cfg.steps.provenance_cleanup.enabled = False
+    cfg.steps.device_metadata.enabled = False
+    cfg.steps.hidden_image.enabled = False
+    cfg.steps.live_photo.enabled = False
+    cfg.paths.temp_dir = str(tmp_path / "tmp")
+    config = tmp_path / "config.json"
+    config.write_text(_json.dumps(cfg.to_dict()), encoding="utf-8")
+    rc = main([str(src), "-o", str(out), "--json-summary", "--config", str(config)])
     assert rc == 0

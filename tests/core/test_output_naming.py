@@ -32,6 +32,7 @@ def test_live_photo_bundle_is_written_uppercase(tmp_path):
     cfg.output.subfolder_per_run = False
     cfg.steps.live_photo.enabled = True
     cfg.steps.hidden_image.enabled = False
+    cfg.steps.provenance_cleanup.enabled = False
 
     result = run_job(cfg, [src], output_dir=out, seed=1,
                      temp_base=tmp_path / "tmp", dry_run=False)
@@ -43,7 +44,10 @@ def test_live_photo_bundle_is_written_uppercase(tmp_path):
     # the pair shares one stem - that is how 爱思助手 pairs them
     assert jpgs[0].stem == movs[0].stem
     # and nothing was left behind in the other casing
-    assert list(out.glob("*.jpg")) == [] and list(out.glob("*.mov")) == []
+    # (Windows' glob is case-insensitive, so compare names exactly)
+    names = [p.name for p in out.iterdir()]
+    assert not any(n.endswith(".jpg") for n in names)
+    assert not any(n.endswith(".mov") for n in names)
 
 
 def test_non_live_photo_output_is_uppercase(tmp_path):
@@ -59,12 +63,14 @@ def test_non_live_photo_output_is_uppercase(tmp_path):
     cfg.output.subfolder_per_run = False
     cfg.steps.live_photo.enabled = False
     cfg.steps.hidden_image.enabled = False
+    cfg.steps.provenance_cleanup.enabled = False
 
     run_job(cfg, [src], output_dir=out, seed=1,
             temp_base=tmp_path / "tmp", dry_run=False)
 
     assert len(list(out.glob(f"*{OUTPUT_JPG_EXT}"))) == 1
-    assert list(out.glob("*.jpg")) == []
+    # glob is case-insensitive on Windows; compare names exactly
+    assert not any(p.name.endswith(".jpg") for p in out.iterdir())
 
 
 def test_rename_off_still_normalizes_extension(tmp_path):
@@ -81,6 +87,7 @@ def test_rename_off_still_normalizes_extension(tmp_path):
     cfg = default_config()
     cfg.output.subfolder_per_run = False
     cfg.steps.rename.enabled = False
+    cfg.steps.provenance_cleanup.enabled = False
     cfg.steps.device_metadata.enabled = False
     cfg.steps.hidden_image.enabled = False
 

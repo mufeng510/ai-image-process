@@ -64,7 +64,9 @@ def _package_missing():
     return patch.object(builtins, "__import__", side_effect=fake_import)
 
 
-def test_provenance_cleanup_skips_when_package_missing(tmp_path: Path):
+def test_provenance_cleanup_fails_when_package_missing(tmp_path: Path):
+    """Missing environment: the file must fail loudly, never ship an uncleaned
+    copy of the original."""
     cfg = default_config()
     cfg.steps.provenance_cleanup.enabled = True
     step = ProvenanceCleanupStep()
@@ -74,8 +76,38 @@ def test_provenance_cleanup_skips_when_package_missing(tmp_path: Path):
         result = step.run(ctx)
 
     assert isinstance(result, StepResult)
-    assert result.ok
-    assert "unavailable" in result.message
+    assert not result.ok
+    assert "remove-ai-watermarks" in (result.error or "")
+    # no silent pass-through: the record still points at the unprocessed source
+    assert ctx.record.current_path == ctx.record.source_path
+
+
+def test_provenance_cleanup_preflight_refuses_when_package_missing(tmp_path: Path):
+    """Job-level gate: the whole run is refused before anything is written."""
+    import importlib.util
+    import random
+
+    from app.core.preflight import run_preflight
+    from app.core.steps.input_normalize import collect_inputs, to_records
+
+    real_find_spec = importlib.util.find_spec
+
+    def fake_find_spec(name, *args, **kwargs):
+        if name == "remove_ai_watermarks" or name.startswith("remove_ai_watermarks."):
+            raise ModuleNotFoundError(name)
+        return real_find_spec(name, *args, **kwargs)
+
+    src = tmp_path / "in"; src.mkdir()
+    Image.new("RGB", (32, 32), (1, 2, 3)).save(src / "a.png")
+    cfg = default_config()
+    cfg.steps.hidden_image.enabled = False
+    cfg.steps.live_photo.enabled = False
+    cfg.steps.device_metadata.enabled = False
+    recs = to_records(collect_inputs([src], cfg))
+    with patch("importlib.util.find_spec", side_effect=fake_find_spec):
+        pf = run_preflight(cfg, [src], recs, tmp_path / "out", random.Random(0))
+    assert pf.ok is False
+    assert "remove-ai-watermarks" in pf.error
 
 
 def test_provenance_cleanup_subprocess_fallback_blocked_when_frozen(tmp_path: Path):

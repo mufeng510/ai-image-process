@@ -20,6 +20,18 @@ REPO = Path(__file__).resolve().parents[2]
 INSTALLER = REPO / "scripts" / "install_agent_skill.sh"
 
 
+def _find_bash() -> str:
+    """Locate a bash for the POSIX installer script (Git-for-Windows counts)."""
+    import shutil
+
+    for candidate in (shutil.which("bash"),
+                      r"C:\Program Files\Git\bin\bash.exe",
+                      r"C:\Program Files (x86)\Git\bin\bash.exe"):
+        if candidate and Path(candidate).is_file():
+            return candidate
+    pytest.skip("bash not found on this machine (needs Git for Windows or a unix shell)")
+
+
 @pytest.fixture(autouse=True)
 def _fake_skill_home(tmp_path, monkeypatch):
     """Redirect the global target so nothing here can touch the real $HOME.
@@ -113,7 +125,8 @@ def test_cli_invocation_never_names_a_binary_that_is_missing(tmp_path, monkeypat
     fake_root.mkdir()
     monkeypatch.setattr(agent_skill, "app_root", lambda: fake_root)
 
-    missing = fake_root / "AI-Image-Process-CLI"
+    name = "AI-Image-Process-CLI.exe" if sys.platform.startswith("win") else "AI-Image-Process-CLI"
+    missing = fake_root / name
     assert agent_skill.cli_invocation().split()[0] != str(missing)
 
     missing.write_text("#!/bin/sh\n")
@@ -131,8 +144,8 @@ def test_installer_script_actually_installs_both_files(tmp_path):
     land, or the skill points at a file the agent cannot read."""
     target = tmp_path / "dest"
     p = subprocess.run(
-        ["bash", str(INSTALLER), "--target", str(target)],
-        capture_output=True, text=True, timeout=120,
+        [_find_bash(), str(INSTALLER), "--target", str(target)],
+        capture_output=True, encoding="utf-8", errors="replace", timeout=120,
     )
     assert p.returncode == 0, p.stderr
     installed = target / agent_skill.SKILL_ID
@@ -146,8 +159,8 @@ def test_installer_prefers_the_cross_agent_home_when_set(tmp_path, monkeypatch):
     fake = tmp_path / "redirected"
     env = {**dict(__import__("os").environ), "AGENT_SKILLS_HOME": str(fake)}
     p = subprocess.run(
-        ["bash", str(INSTALLER)],
-        capture_output=True, text=True, timeout=120, env=env,
+        [_find_bash(), str(INSTALLER)],
+        capture_output=True, encoding="utf-8", errors="replace", timeout=120, env=env,
     )
     assert p.returncode == 0, p.stderr
     assert (fake / agent_skill.SKILL_ID / "SKILL.md").is_file()

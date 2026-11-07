@@ -43,7 +43,9 @@ def _records(tmp_path: Path, count: int = 1):
     for i in range(count):
         Image.new("RGB", (16, 16), (i + 1, i + 1, i + 1)).save(src / f"img_{i}.jpg")
     cfg = default_config()
+    cfg.steps.provenance_cleanup.enabled = False  # keep the package gate out of it
     cfg.steps.hidden_image.enabled = False     # keep the library checks out of it
+    cfg.steps.live_photo.enabled = False       # tests that want it set it explicitly
     recs = to_records(collect_inputs([src], cfg))
     assert len(recs) == count
     return cfg, src, recs
@@ -221,6 +223,7 @@ def test_an_earlier_refusal_keeps_its_own_message(tmp_path, monkeypatch):
     cfg = default_config()
     cfg.steps.hidden_image.enabled = False
     cfg.steps.reencode.enabled = False          # nothing re-encodes -> PNG passes through
+    cfg.steps.rotate_crop.enabled = False        # rotate_crop re-encodes too, keep it off
     cfg.steps.device_metadata.enabled = True
     recs = to_records(collect_inputs([src], cfg))
     _pin_diagnose(monkeypatch, BROKEN)

@@ -33,3 +33,6 @@ Tools/exiftool/SOURCE-UNIX.txt
 # The whole tree is fetched by scripts/fetch_perl.sh, SOURCE.txt included.
 # Ignoring per-subdir left a gap that swallowed a stray copy of the tree.
 Tools/perl/
+
+# Local scratch space used by agent sessions (test images, smoke outputs)
+.tmp/

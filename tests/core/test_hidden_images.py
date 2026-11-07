@@ -60,6 +60,7 @@ def test_precheck_error_mentions_skipped_files(tmp_path):
     cfg = default_config()
     cfg.steps.provenance_cleanup.enabled = False
     cfg.steps.device_metadata.enabled = False
+    cfg.steps.live_photo.enabled = False
     cfg.steps.hidden_image.enabled = True
     cfg.steps.hidden_image.library_dir = str(lib)
     cfg.paths.temp_dir = str(tmp_path / "tmp")
@@ -119,6 +120,7 @@ def test_precheck_blocks_and_never_partial(tmp_path):
     cfg = default_config()
     cfg.steps.provenance_cleanup.enabled = False
     cfg.steps.device_metadata.enabled = False
+    cfg.steps.live_photo.enabled = False
     cfg.steps.hidden_image.enabled = True
     cfg.steps.hidden_image.library_dir = str(lib)
     cfg.paths.temp_dir = str(tmp_path / "tmp")
@@ -138,6 +140,7 @@ def test_exact_count_passes_and_deletes_on_success(tmp_path):
     cfg = default_config()
     cfg.steps.provenance_cleanup.enabled = False
     cfg.steps.device_metadata.enabled = False
+    cfg.steps.live_photo.enabled = False
     cfg.steps.hidden_image.enabled = True
     cfg.steps.hidden_image.library_dir = str(lib)
     cfg.paths.temp_dir = str(tmp_path / "tmp")
@@ -157,6 +160,7 @@ def test_failed_file_retains_hidden(tmp_path):
     cfg = default_config()
     cfg.steps.provenance_cleanup.enabled = False
     cfg.steps.device_metadata.enabled = False
+    cfg.steps.live_photo.enabled = False
     cfg.steps.hidden_image.enabled = True
     cfg.steps.hidden_image.library_dir = str(lib)
     cfg.paths.temp_dir = str(tmp_path / "tmp")
