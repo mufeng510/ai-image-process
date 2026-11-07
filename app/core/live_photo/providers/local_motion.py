@@ -28,20 +28,39 @@ class LocalMotionVideoGenerator(VideoGenerator):
         vw -= vw % 2
         vh -= vh % 2
         n_frames = max(2, int(ctx.duration_seconds * ctx.fps))
+        z1 = 1.0 + self.motion_strength
         rng = random.Random(ctx.seed)
-        direction = rng.choice([-1, 1])
-        # Subtle zoom: 1.0 -> 1.0+strength over the clip (Ken Burns lite).
-        z0, z1 = 1.0, 1.0 + self.motion_strength
+        # Two-phase handheld move: a quick ease-out zoom over the first
+        # ~0.5s (like the lens settling the instant the shutter fires), then
+        # the framing holds still with only a tiny sinusoidal jitter. This
+        # reads far closer to a real handheld shot than a slow Ken Burns.
+        ease_frames = min(n_frames - 1, max(2, int(0.5 * ctx.fps)))
+        # pseudo-random phases so consecutive shots never jitter in sync
+        p1, p2, p3, p4 = (rng.uniform(0, 6.2831853072) for _ in range(4))
+        # amplitude in input (4x supersampled) pixels; ~1px at output scale
+        amp = 4.0
         out = Path(ctx.work_dir) / "local_motion.mov"
         out.parent.mkdir(parents=True, exist_ok=True)
         # zoompan operates per-input-frame; single still looped.
         # NOTE: zoompan has no `flags` option (it was rejected by ffmpeg
         # 7.1 with "Option not found"); lanczos lives on the scale filter.
+        z_expr = (
+            f"if(lt(on,{ease_frames}),"
+            f"1+{self.motion_strength:.5f}*(1-pow(1-on/{ease_frames},3)),"
+            f"{z1:.5f})"
+        )
+        x_expr = (
+            f"iw/2-(iw/zoom/2)"
+            f"+{amp:.5f}*(sin(on*0.83+{p1:.5f})+0.55*sin(on*1.97+{p2:.5f}))"
+        )
+        y_expr = (
+            f"ih/2-(ih/zoom/2)"
+            f"+{amp:.5f}*(sin(on*0.71+{p3:.5f})+0.55*sin(on*2.31+{p4:.5f}))"
+        )
         filt = (
             f"scale={vw * 4}:{vh * 4}:flags=lanczos,"
-            f"zoompan=z='min({z0}+{z1 - z0:.5f}*on/{max(1, n_frames - 1)}"
-            f",{z1:.5f})':x='iw/2-(iw/zoom/2){direction:+d}*on/{max(1, n_frames - 1)}*10'"
-            f":y='ih/2-(ih/zoom/2)':d={n_frames}:fps={ctx.fps}:s={vw}x{vh},"
+            f"zoompan=z='{z_expr}':x='{x_expr}':y='{y_expr}'"
+            f":d={n_frames}:fps={ctx.fps}:s={vw}x{vh},"
             "format=yuv420p"
         )
         cmd = [

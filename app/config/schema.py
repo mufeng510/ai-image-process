@@ -81,14 +81,14 @@ class SimpleStepConfig:
 
 @dataclass
 class RotateCropStepConfig:
-    enabled: bool = False
+    enabled: bool = True  # default ON (only visible_watermark ships OFF)
     min_angle: float = -2.0
     max_angle: float = 2.0
 
 
 @dataclass
 class HiddenImageStepConfig:
-    enabled: bool = False
+    enabled: bool = True  # default ON (only visible_watermark ships OFF)
     library_dir: str = ""
     opacity: float = 0.02  # 0..0.5 fraction (default 2%)
 
@@ -115,7 +115,7 @@ class AIVideoConfig:
 
 @dataclass
 class LivePhotoStepConfig:
-    enabled: bool = False
+    enabled: bool = True  # default ON (only visible_watermark ships OFF)
     video_source: str = "local_motion"  # local_motion|ai_video
     local_motion: LocalMotionConfig = field(default_factory=LocalMotionConfig)
     ai_video: AIVideoConfig = field(default_factory=AIVideoConfig)
@@ -149,6 +149,11 @@ class InputConfig:
     # finishes, so the next batch starts from an empty drop zone. Turn it off
     # to keep the selection around (handy for re-running after a failure).
     clear_after_run: bool = True
+    # GUI only: after a run finishes, delete the original inputs — a path is
+    # removed wholesale (whole folder), a file is unlinked — but only when
+    # the run really finished (not preflight-refused, not cancelled) and every
+    # affected file was processed with its outputs committed to disk.
+    delete_originals_after_run: bool = False
 
 
 @dataclass
@@ -243,7 +248,10 @@ def migrate_config(data: dict[str, Any]) -> dict[str, Any]:
     if version < 1:
         data["config_version"] = 1
     steps = data.setdefault("steps", {})
-    # v2: new steps default OFF so upgrades never change existing behavior.
+    # v2: new steps were introduced with default OFF so upgrades never changed
+    # existing behavior. Fresh installs now ship every step ON except
+    # visible_watermark (see the dataclass defaults); pre-v2 configs keep the
+    # old OFF values via the setdefault calls below.
     # Deliberate exception: output.subfolder_per_run ships ON (users asked for
     # it), so upgraded configs also start writing into a timestamped folder.
     # The README calls that out; the settings checkbox turns it back off.

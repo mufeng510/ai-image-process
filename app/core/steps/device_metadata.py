@@ -58,9 +58,14 @@ class DeviceMetadataStep(Step):
                 hidden_src=hidden_src,
             )
             if runner is None or not getattr(runner, "available", lambda: False)():
-                # Still succeed logically for environments without exiftool binary;
-                # metadata write skipped but device selection recorded.
-                return StepResult(self.id, True, message="exiftool unavailable; device chosen only")
+                # Missing environment: fail loudly. Preflight normally refuses
+                # the whole job earlier (see run_preflight); this is the
+                # backstop for direct step invocation.
+                return StepResult(
+                    self.id, False,
+                    error="ExifTool 不可用，无法写入设备 Metadata。"
+                           "请安装/修复 ExifTool（「设置 → 处理 → 外部运行时」），"
+                           "或关闭「写入设备 Metadata」步骤。")
 
             args = ["-overwrite_original"]
             for k, v in tags.items():

@@ -57,7 +57,9 @@ jq -r '.outputs[].output' result.json
 反过来，`rc=1` 时绝不能当作成功。
 
 预检失败（`rc=2`）涵盖：输入路径不存在、目录里没有可处理的图片、非 JPG 输入但
-没有会重编码的步骤、ExifTool / FFmpeg 不可用、Live Photo 的 AI Provider 未配置等。
+没有会重编码的步骤、remove-ai-watermarks 未安装、ExifTool / FFmpeg 不可用、
+Live Photo 的 AI Provider 未配置等。
+缺依赖/运行时一律拒绝启动，不会以「复制原图」之类的静默降级顶替。
 
 ---
 
@@ -93,6 +95,7 @@ jq -r '.outputs[].output' result.json
 | 行为 | 默认 | 后果 |
 | --- | --- | --- |
 | 目录**不递归** | `input.recurse_folders=false` | 子目录里的图片被**静默跳过** |
+| 新装默认全开（除可见水印） | `steps.rotate_crop/hidden_image/live_photo.enabled=true` | 未配隐藏图片库 / 机器上没 FFmpeg 时**首跑 `rc=2`**；用 `--config` 局部关掉即可 |
 | 精确重复被删除 | `steps.deduplicate.enabled=true` | 内容完全相同的文件只保留一个 |
 | 每次建时间戳子目录 | `output.subfolder_per_run=true` | 产出在 `out/20261019-101500/` 下，不在 `out/` 根 |
 | 同名冲突重命名 | `output.conflict_policy='rename'` | 不覆盖，改为加后缀 |
@@ -158,6 +161,7 @@ device_metadata → rotate_crop → hidden_image → live_photo → output_write
 | `input.recurse_folders` | `false` | **是否递归扫描子目录** |
 | `input.extensions` | `jpg,jpeg,png,webp,tif,tiff,bmp` | 接受的扩展名白名单 |
 | `input.clear_after_run` | `true` | 处理完自动清空 GUI 里已选的文件/路径（仅 GUI，CLI 不使用） |
+| `input.delete_originals_after_run` | `false` | **危险**：仅 GUI 使用；任务真正跑完且产物落盘后删除输入原件（文件→unlink，文件夹→rmtree，仅当其中无失败项） |
 | `output.directory` | `""` | 输出目录（`-o` 会覆盖它） |
 | `output.subfolder_per_run` | `true` | 每次任务建时间戳子文件夹 |
 | `output.conflict_policy` | `rename` | `overwrite` / `skip` / `rename` |
@@ -189,12 +193,12 @@ device_metadata → rotate_crop → hidden_image → live_photo → output_write
 | `steps.device_metadata.randomize_datetime` | `true` | 拍摄时间随机化 |
 | `steps.device_metadata.offset_min_minutes` / `offset_max_minutes` | `10` / `10000` | 时间偏移范围 |
 | `steps.device_metadata.software_tag` | `iOS Camera` | Software 标签 |
-| `steps.rotate_crop.enabled` | `false` | 旋转裁剪 |
+| `steps.rotate_crop.enabled` | `true` | 旋转裁剪 |
 | `steps.rotate_crop.min_angle` / `max_angle` | `-2.0` / `2.0` | 角度范围 |
-| `steps.hidden_image.enabled` | `false` | 隐藏图片 |
+| `steps.hidden_image.enabled` | `true` | 隐藏图片（启用后缺库/素材不足会 `rc=2`） |
 | `steps.hidden_image.library_dir` | `""` | 素材库目录 |
 | `steps.hidden_image.opacity` | `0.02` | 不透明度，0–0.5 |
-| `steps.live_photo.enabled` | `false` | Live Photo |
+| `steps.live_photo.enabled` | `true` | Live Photo（需要 FFmpeg） |
 | `steps.live_photo.video_source` | `local_motion` | `local_motion` / `ai_video` |
 | `steps.live_photo.local_motion.duration_seconds` / `fps` / `motion_strength` | `3.0` / `30` / `0.06` | 本地动态参数 |
 | `steps.live_photo.ai_video.provider` / `model` / `endpoint` / `api_key` | `""` | **AI Provider，缺一不可** |

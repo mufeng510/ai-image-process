@@ -10,6 +10,19 @@ from app.core.steps.base import Step, StepContext
 from app.platform import CREATE_NO_WINDOW
 
 
+_MISSING_PACKAGE_MESSAGE = (
+    "remove-ai-watermarks 未安装，无法清理 AI Metadata。\n\n"
+    "请在「设置 → 处理 → 清理 AI Metadata」点击「安装依赖」在线安装，\n"
+    '或执行: pip install "remove-ai-watermarks"，\n'
+    "或关闭该步骤后重试。"
+)
+
+
+def _missing_package_error() -> RuntimeError:
+    """The environment is missing the optional dependency: fail, never degrade."""
+    return RuntimeError(_MISSING_PACKAGE_MESSAGE)
+
+
 class ProvenanceCleanupStep(Step):
     id = "provenance_cleanup"
     title = "清理 AI Metadata"
@@ -18,21 +31,20 @@ class ProvenanceCleanupStep(Step):
         return bool(config.steps.provenance_cleanup.enabled)
 
     def run(self, ctx: StepContext) -> StepResult:
-        # Prefer library API when available; otherwise pass-through with warning.
         src = ctx.record.current_path
         dest = ctx.workspace.work / f"{ctx.record.index:04d}_clean{src.suffix}"
         try:
             cleaned = _try_remove_ai_watermarks(src, dest, mode=ctx.config.steps.provenance_cleanup.mode)
             if cleaned is None:
-                # Graceful degradation for two cases, neither of which may
-                # fail the file: the package is not installed, or it ran but
-                # produced no output because the format is unsupported
-                # (remove-ai-watermarks skips TIFF/BMP silently, reporting
-                # failed=0 with an empty output directory).
+                # The upstream ran but produced no output because the format is
+                # unsupported (remove-ai-watermarks skips TIFF/BMP silently,
+                # reporting failed=0 with an empty output directory). That is
+                # not a missing environment, so the file passes through with a
+                # copy; a *missing* package raises and fails the file instead.
                 shutil.copy2(src, dest)
                 ctx.record.current_path = dest
                 return StepResult(self.id, True,
-                                  message="provenance package unavailable or format unsupported; "
+                                  message="provenance cleanup: format unsupported by remove-ai-watermarks; "
                                           "copied original")
             ctx.record.current_path = cleaned
             return StepResult(self.id, True, message="provenance cleanup done")
@@ -43,11 +55,12 @@ class ProvenanceCleanupStep(Step):
 def _try_remove_ai_watermarks(src: Path, dest: Path, mode: str = "metadata") -> Path | None:
     """Attempt metadata cleanup via remove-ai-watermarks if installed.
 
-    Returns the cleaned path on success. Returns None when cleanup could not
-    run — either the package is missing, or it ran but skipped this file
-    because the format is unsupported (remove-ai-watermarks 0.46.x filters
-    TIFF/BMP out of the batch without reporting a failure). Callers treat
-    None as "copy the original through", never as a task error.
+    Returns the cleaned path on success. Returns None only when the upstream
+    ran but produced no output because the format is unsupported
+    (remove-ai-watermarks 0.46.x filters TIFF/BMP out of the batch without
+    reporting a failure); callers treat None as "copy the original through".
+    A *missing* package raises RuntimeError — the environment is broken, so
+    the file must fail loudly instead of silently shipping an uncleaned copy.
     """
     try:
         import importlib
@@ -69,7 +82,7 @@ def _try_remove_ai_watermarks(src: Path, dest: Path, mode: str = "metadata") -> 
             except ImportError:
                 continue
         if mod is None:
-            return None
+            raise _missing_package_error()
 
         # If a callable process/clean API exists, use it; else subprocess module CLI.
         for attr in ("clean_file", "process_file", "remove_metadata"):
@@ -127,7 +140,7 @@ def _try_remove_ai_watermarks(src: Path, dest: Path, mode: str = "metadata") -> 
         shutil.copy2(outputs[0], dest)
         return dest
     except ImportError:
-        return None
+        raise _missing_package_error() from None
 
 
 def _run_remove_batch(api, src: Path, dest: Path, mode: str) -> Path | None:

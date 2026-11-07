@@ -123,8 +123,20 @@ class MainWindow(QMainWindow):
         out_layout.addLayout(out_row)
         self.chk_auto_create = QCheckBox("自动创建输出目录")
         self.chk_preserve = QCheckBox("保留原始图片（推荐）")
+        self.chk_delete_originals = QCheckBox("处理完成后删除原件（危险，不可撤销）")
+        self.chk_delete_originals.setStyleSheet("color:#c53030;")
+        self.chk_delete_originals.setToolTip(
+            "处理完成后删除输入的原件：\n"
+            "· 输入是文件 → 删除该文件\n"
+            "· 输入是文件夹 → 删除整个文件夹（其中有任何文件处理失败就保留，"
+            "文件夹内的非图片文件也会一起删除）\n"
+            "\n"
+            "仅当任务真正跑完时才执行：预检未通过 / 取消 / 没有落盘产物时不会删除。\n"
+            "删除前会确认每个产物真实存在于磁盘上。此操作不可恢复。"
+        )
         out_layout.addWidget(self.chk_auto_create)
         out_layout.addWidget(self.chk_preserve)
+        out_layout.addWidget(self.chk_delete_originals)
         root.addWidget(out_box)
 
         steps_box = QGroupBox("处理步骤（顺序见 Registry）")
@@ -151,11 +163,8 @@ class MainWindow(QMainWindow):
         ):
             w.setChecked(True)
             steps_layout.addWidget(w)
-        # 可见水印去除需可选依赖，默认关闭；新功能默认关闭
+        # 可见水印去除需可选依赖，默认关闭；其余步骤默认开启（见 config schema）
         self.chk_visible.setChecked(False)
-        self.chk_rotate.setChecked(False)
-        self.chk_hidden.setChecked(False)
-        self.chk_live.setChecked(False)
         # 隐藏图片库快捷行
         hidden_row = QHBoxLayout()
         self.hidden_edit = QLineEdit()
@@ -231,6 +240,7 @@ class MainWindow(QMainWindow):
         self.out_edit.setText(self._config.output.directory)
         self.chk_auto_create.setChecked(self._config.output.auto_create_directory)
         self.chk_preserve.setChecked(self._config.output.preserve_originals)
+        self.chk_delete_originals.setChecked(self._config.input.delete_originals_after_run)
         self.chk_clear_after.setChecked(self._config.input.clear_after_run)
         self.chk_provenance.setChecked(self._config.steps.provenance_cleanup.enabled)
         self.chk_visible.setChecked(self._config.steps.visible_watermark.enabled)
@@ -274,6 +284,7 @@ class MainWindow(QMainWindow):
         cfg.output.directory = self.out_edit.text().strip()
         cfg.output.auto_create_directory = self.chk_auto_create.isChecked()
         cfg.output.preserve_originals = self.chk_preserve.isChecked()
+        cfg.input.delete_originals_after_run = self.chk_delete_originals.isChecked()
         cfg.input.clear_after_run = self.chk_clear_after.isChecked()
         cfg.steps.provenance_cleanup.enabled = self.chk_provenance.isChecked()
         cfg.steps.visible_watermark.enabled = self.chk_visible.isChecked()
@@ -323,6 +334,123 @@ class MainWindow(QMainWindow):
         self._inputs.clear()
         self.drop_zone.set_summary(0)
         self._append_log("已清空输入")
+
+    @staticmethod
+    def _safe_resolve(path: object) -> Path | None:
+        try:
+            return Path(str(path)).expanduser().resolve()
+        except OSError:
+            return None
+
+    def _delete_guard(self, rp: Path) -> str | None:
+        """Reasons to refuse removing `rp` no matter how well the run went."""
+        if rp == Path(rp.anchor):
+            return "不能删除盘符根目录"
+        home = self._safe_resolve(Path.home())
+        if home is not None and rp == home:
+            return "不能删除用户主目录"
+        return None
+
+    def _delete_inputs_after_run(self, result: "JobResult") -> None:
+        """Delete the original inputs after a real run, if the user opted in.
+
+        Deletion rules (all must pass):
+        * the run finished - this is only called for completed jobs, never
+          for preflight refusals or cancellations;
+        * every success must have at least one committed output that still
+          exists on disk - no output, no deletion;
+        * a file input is unlinked only when it was processed successfully;
+          a folder input is removed wholesale (unrelated files inside go
+          too) only when nothing under it failed and at least one file was
+          produced from it;
+        * inputs that contain outputs or the hidden-image library, and
+          drive roots / the user's home directory, are never deleted.
+        """
+        import shutil
+
+        successes = list(getattr(result, "success", []) or [])
+        failures = list(getattr(result, "failed", []) or [])
+
+        # committed outputs per resolved source path (outputs must exist)
+        committed: dict[Path, list[Path]] = {}
+        for r in successes:
+            outs = list(getattr(r, "output_paths", None) or [])
+            if not outs:
+                single = getattr(r, "output_path", None)
+                if single is not None:
+                    outs = [single]
+            existing = [o for o in (self._safe_resolve(o) for o in outs) if o is not None and o.exists()]
+            src = self._safe_resolve(getattr(r, "source_path", None))
+            if src is not None and existing:
+                committed[src] = existing
+        if not committed:
+            self._append_log("[删除原件] 已跳过：本次没有落盘的产物（输出步骤关闭或产物丢失），保留全部原件")
+            return
+        out_paths = [o for outs in committed.values() for o in outs]
+        lib_raw = (self.hidden_edit.text().strip() if hasattr(self, "hidden_edit") else "")
+        lib_rp = self._safe_resolve(lib_raw) if lib_raw else None
+
+        deleted = 0
+        failed_del = 0
+        skipped: list[str] = []
+        for raw in self._inputs:
+            rp = self._safe_resolve(raw)
+            if rp is None:
+                skipped.append(f"{raw}（路径无法解析）")
+                continue
+            reason = self._delete_guard(rp)
+            if reason is None and any(o == rp or rp in o.parents for o in out_paths):
+                reason = "输入包含本次输出产物，已保留"
+            if reason is None and lib_rp is not None and (
+                lib_rp == rp or lib_rp in rp.parents or rp in lib_rp.parents
+            ):
+                reason = "与隐藏图片库重叠，已保留"
+            if reason is not None:
+                skipped.append(f"{rp}（{reason}）")
+                continue
+            if rp.is_file():
+                if rp in committed:
+                    try:
+                        rp.unlink()
+                        deleted += 1
+                        self._append_log(f"[删除原件] 已删除文件：{rp}")
+                    except OSError as exc:
+                        failed_del += 1
+                        self._append_log(f"[删除原件] 删除失败：{rp}（{exc}）")
+                else:
+                    skipped.append(f"{rp}（未成功处理或产物未落盘）")
+                continue
+            if rp.is_dir():
+                failed_under = [
+                    r for r in failures
+                    if (sp := self._safe_resolve(getattr(r, "source_path", None))) is not None
+                    and (sp == rp or rp in sp.parents)
+                ]
+                if failed_under:
+                    skipped.append(f"{rp}（内有 {len(failed_under)} 个文件处理失败）")
+                    continue
+                success_under = [sp for sp in committed if sp == rp or rp in sp.parents]
+                if not success_under:
+                    skipped.append(f"{rp}（内没有成功产物）")
+                    continue
+                try:
+                    shutil.rmtree(rp)
+                    deleted += 1
+                    self._append_log(f"[删除原件] 已删除文件夹：{rp}")
+                except OSError as exc:
+                    failed_del += 1
+                    self._append_log(f"[删除原件] 删除失败：{rp}（{exc}）")
+                continue
+            skipped.append(f"{rp}（路径不存在）")
+
+        if skipped or failed_del:
+            self._append_log(
+                f"[删除原件] 完成：已删除 {deleted} 项，{failed_del} 项失败；"
+                f"保留 {len(skipped)} 项：{'；'.join(skipped[:5])}"
+                + (" …" if len(skipped) > 5 else "")
+            )
+        else:
+            self._append_log(f"[删除原件] 完成：已删除 {deleted} 项")
 
     def _clear_inputs_after_run(self) -> None:
         """Drop the selection once a run is over (if the toggle is on).
@@ -579,7 +707,10 @@ class MainWindow(QMainWindow):
             self._append_log(text)
             return
         # The run really finished (files may have failed individually - that
-        # is still "处理完"), so the selection can go.
+        # is still "处理完"): deleting the originals is now safe to do.
+        if self.chk_delete_originals.isChecked():
+            self._delete_inputs_after_run(result)
+        # …so the selection can go too.
         self._clear_inputs_after_run()
         self.progress.setValue(100)
         text = f"完成。成功 {result.success_count}，失败 {result.failure_count}"

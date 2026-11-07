@@ -203,12 +203,36 @@ def run_preflight(
             except Exception:
                 hidden_metadata[src_str] = {}
 
+    # 3a. remove-ai-watermarks must be importable, not merely optional. The
+    # step used to copy the original through unchanged when the package was
+    # missing, so a run "succeeded" while shipping uncleaned metadata. Refuse
+    # before anything is written instead.
+    if records and config.steps.provenance_cleanup.enabled:
+        import importlib.util
+
+        try:
+            available = importlib.util.find_spec("remove_ai_watermarks") is not None
+        except Exception:  # noqa: BLE001 - a broken install counts as missing
+            available = False
+        if not available:
+            return PreflightResult(
+                ok=False,
+                error=(
+                    "已启用「清理 AI Metadata」，但未安装 remove-ai-watermarks（可选依赖）。"
+                    "任务不会以原图复制代替清理，已拒绝启动。\n\n"
+                    "请在「设置 → 处理 → 清理 AI Metadata」点击「安装依赖」在线安装，\n"
+                    '或执行: pip install "remove-ai-watermarks"，\n'
+                    "或关闭该步骤后重试。"
+                ),
+                extra={"runtime": "remove-ai-watermarks", "reason": "not_installed"},
+            )
+
     # 3b. ExifTool must be usable, not merely present. It is the one runtime
-    # whose absence does not announce itself: device_metadata returns ok=True
-    # when the runner is missing, so the file lands with no Make/Model/ISO and
-    # is still recorded as a success, and Live Photo fails much later with
-    # "photo asset identifier missing" -- a symptom, not a cause. Refuse before
-    # anything is written instead. FFmpeg gets the same treatment just below.
+    # whose absence used to not announce itself: the device-metadata step
+    # silently wrote nothing and recorded success, and Live Photo failed much
+    # later with "photo asset identifier missing" -- a symptom, not a cause.
+    # Refuse before anything is written instead. FFmpeg gets the same
+    # treatment just below.
     if records:
         needs_exiftool: list[str] = []
         if config.steps.device_metadata.enabled:

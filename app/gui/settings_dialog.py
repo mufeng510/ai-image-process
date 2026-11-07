@@ -364,7 +364,7 @@ class SettingsDialog(QDialog):
         self.prov_mode = QComboBox()
         self.prov_mode.addItem("metadata（推荐，轻量）", "metadata")
         pf.addRow("模式", self.prov_mode)
-        note = QLabel("需要安装 remove-ai-watermarks 时才会实际清理；否则自动降级为复制原图。")
+        note = QLabel("需要安装 remove-ai-watermarks 时才会实际清理；缺少该依赖时任务会直接报错，不会以原图复制代替清理。")
         note.setWordWrap(True)
         note.setStyleSheet("color:#666;font-size:11px;")
         pf.addRow(note)
@@ -714,8 +714,7 @@ class SettingsDialog(QDialog):
             )
         else:
             self.prov_status.setText(
-                "remove-ai-watermarks 未安装：未启用本功能时该步骤自动跳过；"
-                "启用后将仅复制原图。点击“安装依赖”在线安装。"
+                "remove-ai-watermarks 未安装：启用本功能时任务会直接报错。点击“安装依赖”在线安装。"
             )
 
     def _refresh_visible_status(self) -> None:
