@@ -1,11 +1,12 @@
 """Main application window."""
 from __future__ import annotations
 
+import os
 import threading
 from pathlib import Path
 
-from PySide6.QtCore import QTimer, Slot
-from PySide6.QtGui import QAction, QCloseEvent
+from PySide6.QtCore import QTimer, Slot, QUrl
+from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices
 from PySide6.QtWidgets import (
     QCheckBox,
     QFileDialog,
@@ -25,6 +26,7 @@ from PySide6.QtWidgets import (
 from app.config.manager import ConfigManager
 from app.config.paths import user_config_dir
 from app.config.schema import AppConfig, default_config
+from app.core import update_check
 from app.core.dependency_installer import ensure_runtime_site
 from app.core.models import JobResult, ProgressEvent, ProgressKind
 from app.gui.widgets.drop_zone import DropZone
@@ -66,6 +68,12 @@ class MainWindow(QMainWindow):
         self._scan_result: tuple[int, object] | None = None  # (scan_id, result)
         self._scan_done = False
         self._scan_id = 0
+        # 启动时静默检查更新：后台线程 + QTimer 轮询回填 GUI 线程，
+        # 与隐藏图片库扫描同一模式（避免跨线程 Signal/Slot 崩溃窗口销毁）。
+        self._update_thread: threading.Thread | None = None
+        self._update_timer: QTimer | None = None
+        self._update_result: tuple[bool, object, str | None] | None = None  # (manual, ReleaseInfo|None, error)
+        self._update_done = False
         self._controller = PipelineController(self)
         self._controller.progress.connect(self._on_progress)
         self._controller.finished.connect(self._on_finished)
@@ -75,6 +83,10 @@ class MainWindow(QMainWindow):
         self._build_ui()
         self._build_menu()
         self._apply_config_to_ui()
+        # 启动时静默检查一次：有新版本只弹一次提示框，失败不打扰；
+        # offscreen 平台（测试套件）跳过，避免单元测试真的访问网络。
+        if os.environ.get("QT_QPA_PLATFORM") != "offscreen":
+            QTimer.singleShot(1500, self, lambda: self._start_update_check(manual=False))
 
     def _build_ui(self) -> None:
         central = QWidget(self)
@@ -232,6 +244,9 @@ class MainWindow(QMainWindow):
         file_menu.addAction(act_quit)
 
         help_menu = self.menuBar().addMenu("帮助")
+        act_update = QAction("检查更新", self)
+        act_update.triggered.connect(lambda: self._start_update_check(manual=True))
+        help_menu.addAction(act_update)
         act_about = QAction("关于", self)
         act_about.triggered.connect(self._about)
         help_menu.addAction(act_about)
@@ -580,6 +595,89 @@ class MainWindow(QMainWindow):
             self._scan_timer = None
         self._scan_thread = None
 
+    def _start_update_check(self, manual: bool) -> None:
+        """后台检查 GitHub Releases 是否有新版本。
+
+        网络请求在 daemon 线程中执行（可能阻塞数秒）；结果存到实例属性上，
+        由 _on_update_timer 在 GUI 线程回填并弹窗。manual=True 时无论
+        结果如何都会给出反馈；manual=False（启动时静默检查）只在发现
+        新版本时弹窗，出错只写日志。
+        """
+        if self._update_thread is not None and self._update_thread.is_alive():
+            if manual:
+                self.log.appendPlainText("正在检查更新，请稍候…")
+            return
+        self._update_result = None
+        self._update_done = False
+
+        def _run() -> None:
+            try:
+                result = update_check.check_for_update()
+                self._update_result = (manual, result, None)
+            except Exception as exc:  # noqa: BLE001 - 检查失败不应崩溃
+                self._update_result = (manual, None, str(exc))
+            self._update_done = True
+
+        thread = threading.Thread(target=_run, daemon=True)
+        self._update_thread = thread
+        thread.start()
+
+        timer = QTimer(self)
+        timer.timeout.connect(self._on_update_timer)
+        timer.start(100)
+        self._update_timer = timer
+
+    @Slot()
+    def _on_update_timer(self) -> None:
+        """GUI 线程回调：轮询后台检查结果并处理。"""
+        if not self._update_done:
+            return
+        manual, info, error = self._update_result or (False, None, None)
+        self._cancel_update_check()
+        if error is not None:
+            if manual:
+                QMessageBox.warning(self, "检查更新", f"检查更新失败：\n{error}")
+            else:
+                self.log.appendPlainText(f"检查更新失败：{error}")
+            return
+        if info is None:
+            if manual:
+                QMessageBox.information(
+                    self, "检查更新", f"当前版本 v{__version__} 已是最新版本。"
+                )
+            return
+        self._show_found_update(info)
+
+    def _cancel_update_check(self) -> None:
+        """停止轮询并放弃后台线程引用（线程为 daemon，随进程退出）。"""
+        if self._update_timer is not None:
+            try:
+                self._update_timer.timeout.disconnect(self._on_update_timer)
+            except TypeError:  # 连接可能已不存在
+                pass
+            self._update_timer.stop()
+            self._update_timer = None
+        self._update_thread = None
+
+    def _show_found_update(self, info) -> None:
+        """发现新版本：展示版本号与更新日志，用户选择是否前往下载。"""
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Information)
+        box.setWindowTitle("发现新版本")
+        box.setText(f"发现新版本 {info.tag}（当前 v{__version__}）")
+        box.setInformativeText(
+            f"最新版本：{info.name}\n"
+            "建议前往 GitHub Releases 下载对应平台的安装包 / 便携包并安装。\n"
+            "产物未签名，Windows 可能提示 SmartScreen、macOS 可能提示 Gatekeeper，属预期行为。"
+        )
+        box.setDetailedText(info.notes or "（该 release 没有更新日志）")
+        btn_download = box.addButton("前往下载", QMessageBox.ButtonRole.AcceptRole)
+        box.addButton("稍后再说", QMessageBox.ButtonRole.RejectRole)
+        box.exec()
+        if box.clickedButton() is btn_download:
+            QDesktopServices.openUrl(QUrl(info.html_url))
+        self.log.appendPlainText(f"发现新版本 {info.tag}：{info.html_url}")
+
     @Slot()
     def _choose_output(self) -> None:
         folder = QFileDialog.getExistingDirectory(self, "选择输出目录")
@@ -778,6 +876,7 @@ class MainWindow(QMainWindow):
             event.ignore()
             return
         self._cancel_scanner()
+        self._cancel_update_check()
         try:
             self._cfg_mgr.save(self._ui_to_config())
         except Exception:  # noqa: BLE001

@@ -3,6 +3,11 @@
 本文件记录面向用户的主要变更。版本号遵循语义化规则；破坏性/行为变更会单独列出迁移说明。
 格式：Added / Changed / Fixed / Removed / Security。对应标签：`v0.5.9...v0.7.0`。
 
+## Unreleased
+
+### Added
+- **在线检查更新**：新增「帮助 → 检查更新」菜单项，并在启动时静默检查一次（窗口显示后约 1.5 秒触发，后台线程执行，不阻塞 UI；检查失败只写日志，不弹窗打扰）。直接查询 GitHub Releases API 的 `releases/latest`（仅正式版，main 自动构建的 `vX.Y.Z-build.N` 预发布版不算更新），用 `packaging` 语义化比较版本。发现新版本时弹窗展示版本号、Release 名称与更新日志（超长自动截断），点「前往下载」用系统浏览器打开该 Release 页面，由用户自行下载安装；不自动替换正在运行的程序。离线检查逻辑见 `app/core/update_check.py`，单测见 `tests/core/test_update_check.py`。
+
 ## 0.7.0 · 2026-11-09
 
 ### Added
