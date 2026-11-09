@@ -84,18 +84,18 @@ def test_provenance_cleanup_fails_when_package_missing(tmp_path: Path):
 
 def test_provenance_cleanup_preflight_refuses_when_package_missing(tmp_path: Path):
     """Job-level gate: the whole run is refused before anything is written."""
-    import importlib.util
+    import importlib
     import random
 
     from app.core.preflight import run_preflight
     from app.core.steps.input_normalize import collect_inputs, to_records
 
-    real_find_spec = importlib.util.find_spec
+    real_import_module = importlib.import_module
 
-    def fake_find_spec(name, *args, **kwargs):
+    def fake_import_module(name, *args, **kwargs):
         if name == "remove_ai_watermarks" or name.startswith("remove_ai_watermarks."):
             raise ModuleNotFoundError(name)
-        return real_find_spec(name, *args, **kwargs)
+        return real_import_module(name, *args, **kwargs)
 
     src = tmp_path / "in"; src.mkdir()
     Image.new("RGB", (32, 32), (1, 2, 3)).save(src / "a.png")
@@ -104,10 +104,13 @@ def test_provenance_cleanup_preflight_refuses_when_package_missing(tmp_path: Pat
     cfg.steps.live_photo.enabled = False
     cfg.steps.device_metadata.enabled = False
     recs = to_records(collect_inputs([src], cfg))
-    with patch("importlib.util.find_spec", side_effect=fake_find_spec):
+    with patch("importlib.import_module", side_effect=fake_import_module):
         pf = run_preflight(cfg, [src], recs, tmp_path / "out", random.Random(0))
     assert pf.ok is False
     assert "remove-ai-watermarks" in pf.error
+    # The underlying cause must be visible: "未安装" alone misled users when
+    # the package was present but a transitive import was broken.
+    assert "底层错误" in pf.error
 
 
 def test_provenance_cleanup_subprocess_fallback_blocked_when_frozen(tmp_path: Path):

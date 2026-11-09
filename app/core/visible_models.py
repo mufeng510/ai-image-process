@@ -7,6 +7,7 @@ download that pre-seeds the exact cache the backend reads.
 """
 from __future__ import annotations
 
+import importlib
 import importlib.metadata
 import importlib.util
 from dataclasses import dataclass
@@ -31,6 +32,21 @@ class PackageStatus:
     version: str | None
     visible_ready: bool  # package + cv2 pixel runtime importable
     onnx_ready: bool  # onnxruntime importable (required by migan/lama)
+
+
+def api_probe() -> tuple[bool, str | None]:
+    """Import the exact batch API module the pipeline uses.
+
+    A bare find_spec check can report "installed" while a transitive import of
+    the package fails at runtime (e.g. a lazy dependency missing from a frozen
+    bundle), so this performs the real import and returns the reason on
+    failure. Returns (ok, detail); detail is None on success.
+    """
+    try:
+        importlib.import_module("remove_ai_watermarks.api")
+        return True, None
+    except Exception as exc:  # noqa: BLE001 - broken installs should not raise
+        return False, f"{type(exc).__name__}: {exc}"
 
 
 def package_status() -> PackageStatus:

@@ -203,26 +203,35 @@ def run_preflight(
             except Exception:
                 hidden_metadata[src_str] = {}
 
-    # 3a. remove-ai-watermarks must be importable, not merely optional. The
+    # 3a. remove-ai-watermarks must be importable, not merely present. The
     # step used to copy the original through unchanged when the package was
     # missing, so a run "succeeded" while shipping uncleaned metadata. Refuse
-    # before anything is written instead.
+    # before anything is written instead. Probe the real import path the step
+    # uses: a frozen bundle whose stdlib analysis missed a lazy dependency of
+    # remove_ai_watermarks (e.g. plistlib) passes a find_spec check yet cannot
+    # run the step at all, and every file would fail at runtime.
     if records and config.steps.provenance_cleanup.enabled:
-        import importlib.util
+        import importlib
 
+        import_error: Exception | None = None
         try:
-            available = importlib.util.find_spec("remove_ai_watermarks") is not None
-        except Exception:  # noqa: BLE001 - a broken install counts as missing
+            importlib.import_module("remove_ai_watermarks.api")
+            available = True
+        except Exception as exc:  # noqa: BLE001 - a broken install counts as missing
             available = False
+            import_error = exc
         if not available:
+            detail = (f"\n底层错误: {type(import_error).__name__}: {import_error}" if import_error is not None else "")
             return PreflightResult(
                 ok=False,
                 error=(
-                    "已启用「清理 AI Metadata」，但未安装 remove-ai-watermarks（可选依赖）。"
-                    "任务不会以原图复制代替清理，已拒绝启动。\n\n"
+                    "已启用「清理 AI Metadata」，但 remove-ai-watermarks 当前无法导入"
+                    "（可能未安装，或其运行依赖缺失）。任务不会以原图复制代替清理，"
+                    "已拒绝启动。\n\n"
                     "请在「设置 → 处理 → 清理 AI Metadata」点击「安装依赖」在线安装，\n"
                     '或执行: pip install "remove-ai-watermarks"，\n'
                     "或关闭该步骤后重试。"
+                    + detail
                 ),
                 extra={"runtime": "remove-ai-watermarks", "reason": "not_installed"},
             )

@@ -1,7 +1,19 @@
 # Changelog
 
 本文件记录面向用户的主要变更。版本号遵循语义化规则；破坏性/行为变更会单独列出迁移说明。
-格式：Added / Changed / Fixed / Removed / Security。对应标签：`v0.5.9...v0.6.0`。
+格式：Added / Changed / Fixed / Removed / Security。对应标签：`v0.5.9...v0.6.1`。
+
+## 0.6.1 · 2026-11-09
+
+### Fixed
+- **冻结构建 plistlib 缺失导致「清理 AI Metadata」对所有文件报“remove-ai-watermarks 未安装”**：v0.6.0 的 CI 构建没有打包 `remove_ai_watermarks.forensic_metadata` 懒加载的 stdlib 模块 `plistlib`，运行时 `strip_and_verify` 里 `import plistlib` 抛 `ModuleNotFoundError`；该 ImportError 又被当作“包缺失”处理，于是设置页却显示“已安装”，任务 26 个文件全部失败、且报错文案误导。打包 spec 显式内置 `plistlib`（`build/ai-image-process.spec`），Linux/macOS/Windows 构建均覆盖。
+- 步骤失败时不再把底层导入异常吞掉：错误详情附带 `底层错误: <原始异常>`（例如 `ModuleNotFoundError: No module named 'plistlib'`）。
+- **预检门禁 3a 从 find_spec 改为真实 import 探测**：find_spec 只能证明“有这个目录”，证明不了“能跑”。修复后，缺 plistlib 这类残缺安装在预检阶段直接拒绝（rc=2）并在对话框展示底层错误，而不是跑到每文件失败。
+- 设置页「清理 AI Metadata」状态改用真实 import 探测（与流水线同路径），不再显示“已安装，本功能可用”却在运行时全部失败；无法加载时会显示具体原因。
+
+### Migration notes（0.6.0 → 0.6.1）
+- 无不兼容变更；纯缺陷修复。建议所有 Windows/Linux/macOS 用户升级。
+- 无需更改任何配置。
 
 ## 0.6.0 · 2026-11-07
 

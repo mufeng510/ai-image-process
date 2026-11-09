@@ -18,9 +18,17 @@ _MISSING_PACKAGE_MESSAGE = (
 )
 
 
-def _missing_package_error() -> RuntimeError:
-    """The environment is missing the optional dependency: fail, never degrade."""
-    return RuntimeError(_MISSING_PACKAGE_MESSAGE)
+def _missing_package_error(detail: str | None = None) -> RuntimeError:
+    """The environment is missing the optional dependency: fail, never degrade.
+
+    ``detail`` carries the original exception text when one is available so the
+    user does not get a flat "not installed" message when it is really a broken
+    import (e.g. a missing stdlib module inside the frozen bundle).
+    """
+    message = _MISSING_PACKAGE_MESSAGE
+    if detail:
+        message = f"{message}\n底层错误：{detail}"
+    return RuntimeError(message)
 
 
 class ProvenanceCleanupStep(Step):
@@ -82,7 +90,7 @@ def _try_remove_ai_watermarks(src: Path, dest: Path, mode: str = "metadata") -> 
             except ImportError:
                 continue
         if mod is None:
-            raise _missing_package_error()
+            raise _missing_package_error(detail="remove_ai_watermarks（含 cli）均无法导入")
 
         # If a callable process/clean API exists, use it; else subprocess module CLI.
         for attr in ("clean_file", "process_file", "remove_metadata"):
@@ -139,8 +147,8 @@ def _try_remove_ai_watermarks(src: Path, dest: Path, mode: str = "metadata") -> 
             return None
         shutil.copy2(outputs[0], dest)
         return dest
-    except ImportError:
-        raise _missing_package_error() from None
+    except ImportError as exc:
+        raise _missing_package_error(f"{type(exc).__name__}: {exc}") from None
 
 
 def _run_remove_batch(api, src: Path, dest: Path, mode: str) -> Path | None:

@@ -708,9 +708,15 @@ class SettingsDialog(QDialog):
 
     def _refresh_prov_status(self) -> None:
         st = visible_models.package_status()
-        if st.importable:
+        ok, detail = visible_models.api_probe()
+        if st.importable and ok:
             self.prov_status.setText(
                 f"remove-ai-watermarks v{st.version or '?'} 已安装，本功能可用。"
+            )
+        elif st.importable:
+            self.prov_status.setText(
+                f"remove-ai-watermarks v{st.version or '?'} 已安装，但无法加载（{detail}）。"
+                "请点击“安装依赖”重新安装，或查看日志。"
             )
         else:
             self.prov_status.setText(

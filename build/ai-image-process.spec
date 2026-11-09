@@ -185,6 +185,12 @@ for pkg in ("PySide6", "shiboken6"):
 # ssl is required for urllib HTTPS (PyPI wheel downloads); sysconfig keeps
 # packaging.tags happy. The wheel installer needs no bundled pip.
 hiddenimports += ["ssl", "sysconfig"]
+# plistlib: imported lazily by remove_ai_watermarks.forensic_metadata when
+# sniffing image formats (it does C2PA / manifest inspection). No app code
+# imports it at analysis time,
+# so frozen builds must bundle it explicitly or the step dies with
+# ModuleNotFoundError: No module named 'plistlib' at runtime.
+hiddenimports += ["plistlib"]
 
 a = Analysis(
     [str(run_app)],
