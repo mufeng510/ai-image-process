@@ -1,11 +1,11 @@
 Pillow>=10.0.0
-# Upper bound: see pyproject.toml — 6.12.0 crashes at interpreter shutdown
+# Upper bound: see pyproject.toml - 6.12.0 crashes at interpreter shutdown
 # after the offscreen GUI tests, taking `pytest -q` down with it.
 PySide6-Essentials>=6.6.0,<6.12
 pytest>=8.0.0
 packaging>=24.2  # powers the in-app wheel installer
-# Optional provenance cleanup (metadata mode):
-# remove-ai-watermarks>=0.26.0
+# Provenance cleanup (metadata mode); bundled into the release build (Apache-2.0):
+remove-ai-watermarks>=0.52.0
 # Optional visible watermark removal (model weights are NOT bundled;
 # download them from the app settings page or let first use fetch them):
 # remove-ai-watermarks[visible]>=0.34.0

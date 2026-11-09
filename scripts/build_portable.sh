@@ -15,8 +15,7 @@ echo "[build] python=$PYTHON"
 # GUI extra (upper bound mirrors requirements.txt: 6.12.0 crashes at shutdown)
 "$PYTHON" -m pip install "PySide6-Essentials>=6.6.0,<6.12" || "$PYTHON" -m pip install "PySide6>=6.6.0,<6.12"
 
-# Optional provenance package (can bloat; leave commented by default)
-# "$PYTHON" -m pip install "remove-ai-watermarks>=0.26.0"
+# remove-ai-watermarks is a required, bundled release dependency (see requirements.txt).
 
 # FFmpeg is required for Live Photo: fetch the pinned binary before
 # packaging. Fail fast instead of shipping without it.
@@ -57,6 +56,7 @@ rm -rf build/pyinstaller dist/AI-Image-Process
 # Copy licenses / notices
 mkdir -p dist/AI-Image-Process
 cp -f LICENSE dist/AI-Image-Process/ 2>/dev/null || true
+cp -f THIRD_PARTY_NOTICES.md dist/AI-Image-Process/ 2>/dev/null || true
 cp -f README.md dist/AI-Image-Process/ 2>/dev/null || true
 
 # Ship the agent skill with the artifact. A user who downloaded the zip has no

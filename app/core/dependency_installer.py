@@ -1,11 +1,14 @@
 """In-app installation of the optional remove-ai-watermarks dependency.
 
-Two features depend on this package and can each be installed without
-leaving the app (settings dialog buttons map 1:1 to these features):
+Optional extras that can be installed without leaving the app (settings
+dialog buttons map 1:1 to these features):
 
-- "provenance"   清理 AI Metadata  -> remove-ai-watermarks>=0.26.0
 - "visible"      去除可见水印      -> remove-ai-watermarks[visible]>=0.26.0
 - "onnxruntime"  migan/lama 填充后端支持 -> remove-ai-watermarks[migan]>=0.26.0
+
+The base remove-ai-watermarks package itself is bundled into the release
+build (requirements.txt + hiddenimports in build/ai-image-process.spec)
+since 0.7.0, so provenance cleanup needs no install step.
 
 Install strategy:
 
@@ -31,9 +34,8 @@ from app.platform import CREATE_NO_WINDOW
 from app.core.wheel_installer import install_specs_to_target, WheelInstallError
 
 # Installable features -> pip requirement specs. The dialog exposes one
-# install button per feature (the two that matter: provenance + visible).
+# Install button per feature (provenance is bundled since 0.7.0).
 FEATURE_SPECS: dict[str, str] = {
-    "provenance": "remove-ai-watermarks>=0.26.0",
     "visible": "remove-ai-watermarks[visible]>=0.26.0",
     # The learned fill backends need onnxruntime + huggingface-hub; the
     # package's own migan extra is the supported combination for both.
@@ -41,7 +43,6 @@ FEATURE_SPECS: dict[str, str] = {
 }
 
 FEATURE_LABELS: dict[str, str] = {
-    "provenance": "清理 AI Metadata",
     "visible": "去除可见水印",
     "onnxruntime": "migan/lama 后端支持",
 }

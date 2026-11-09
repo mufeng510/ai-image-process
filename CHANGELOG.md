@@ -1,7 +1,24 @@
 # Changelog
 
 本文件记录面向用户的主要变更。版本号遵循语义化规则；破坏性/行为变更会单独列出迁移说明。
-格式：Added / Changed / Fixed / Removed / Security。对应标签：`v0.5.9...v0.6.1`。
+格式：Added / Changed / Fixed / Removed / Security。对应标签：`v0.5.9...v0.7.0`。
+
+## 0.7.0 · 2026-11-09
+
+### Added
+- **remove-ai-watermarks 核心随发行包内置**：「清理 AI Metadata」开箱即用，无需任何安装步骤。CI 三端构建（Windows/macOS/Linux）均捆绑核心包（Apache-2.0）。打包时 PyInstaller 按字面 import 收录，并在 hiddenimports 显式声明 `remove_ai_watermarks`/`remove_ai_watermarks.api`/`plistlib`。
+
+### Changed
+- 设置「处理 → 清理 AI Metadata」不再有「安装依赖」按钮；依赖已内置。开发环境未安装该包时提示 pip 安装；冻结发行包损坏时提示反馈，不再指向 pip。
+- 预检门禁 3a 保持**真实 import 探测**（0.6.1 引入）：内置依赖损坏时 rc=2 并显示底层错误。
+
+### Removed
+- 应用内「provenance」安装入口删除（`dependency_installer.FEATURE_SPECS["provenance"]` 与设置页「安装依赖」按钮）。「去除可见水印」的 `[visible]` extra 与 `[migan]` onnxruntime 后端仍支持应用内安装，migan/lama 模型下载仍为用户手动下载，均未改变。
+
+### Migration notes（0.6.x → 0.7.0）
+- 不兼容变更只有 UI/安装流程：升级后不再需要任何「安装依赖」操作即可使用「清理 AI Metadata」。
+- 已存在的运行时 site（`%LOCALAPPDATA%\AI-Image-Process\python-packages`）中的 remove-ai-watermarks 不再被使用（内置包优先），保留即可，不影响功能。
+- 无需更改任何配置。
 
 ## 0.6.1 · 2026-11-09
 

@@ -226,10 +226,10 @@ def run_preflight(
                 ok=False,
                 error=(
                     "已启用「清理 AI Metadata」，但 remove-ai-watermarks 当前无法导入"
-                    "（可能未安装，或其运行依赖缺失）。任务不会以原图复制代替清理，"
+                    "（内置依赖损坏，或开发环境未安装）。任务不会以原图复制代替清理，"
                     "已拒绝启动。\n\n"
-                    "请在「设置 → 处理 → 清理 AI Metadata」点击「安装依赖」在线安装，\n"
-                    '或执行: pip install "remove-ai-watermarks"，\n'
+                    "发行包请重新下载安装，或向作者反馈；"
+                    '开发环境请执行: pip install "remove-ai-watermarks"，\n'
                     "或关闭该步骤后重试。"
                     + detail
                 ),

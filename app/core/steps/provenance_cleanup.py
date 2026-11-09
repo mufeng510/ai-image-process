@@ -11,9 +11,9 @@ from app.platform import CREATE_NO_WINDOW
 
 
 _MISSING_PACKAGE_MESSAGE = (
-    "remove-ai-watermarks 未安装，无法清理 AI Metadata。\n\n"
-    "请在「设置 → 处理 → 清理 AI Metadata」点击「安装依赖」在线安装，\n"
-    '或执行: pip install "remove-ai-watermarks"，\n'
+    "remove-ai-watermarks 无法导入，无法清理 AI Metadata。\n\n"
+    "该功能已随发行包内置；若这是开发环境，请执行: pip install \"remove-ai-watermarks\"。\n"
+    "若使用的是发行包却看到此错误，说明内置依赖损坏：请重新下载安装，或向作者反馈。\n"
     "或关闭该步骤后重试。"
 )
 

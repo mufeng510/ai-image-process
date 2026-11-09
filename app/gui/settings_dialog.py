@@ -28,7 +28,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.config.manager import ConfigManager
-from app.config.paths import phones_json_path, user_config_dir
+from app.config.paths import is_frozen, phones_json_path, user_config_dir
 from app.config.schema import AppConfig, default_config
 from app.core import dependency_installer, visible_models
 from app.core.device_library import DeviceLibrary
@@ -364,7 +364,7 @@ class SettingsDialog(QDialog):
         self.prov_mode = QComboBox()
         self.prov_mode.addItem("metadata（推荐，轻量）", "metadata")
         pf.addRow("模式", self.prov_mode)
-        note = QLabel("需要安装 remove-ai-watermarks 时才会实际清理；缺少该依赖时任务会直接报错，不会以原图复制代替清理。")
+        note = QLabel("移除文件中的 AI 来源元数据。该功能已随发行包内置（基于 remove-ai-watermarks），无需安装。")
         note.setWordWrap(True)
         note.setStyleSheet("color:#666;font-size:11px;")
         pf.addRow(note)
@@ -372,15 +372,6 @@ class SettingsDialog(QDialog):
         self.prov_status.setWordWrap(True)
         self.prov_status.setStyleSheet("color:#666;font-size:11px;")
         pf.addRow("状态", self.prov_status)
-        prov_dep_row = QHBoxLayout()
-        self.btn_install_prov = QPushButton("安装依赖")
-        self.btn_install_prov.setToolTip(
-            f'在线安装 {dependency_installer.FEATURE_SPECS["provenance"]}（本功能所需）'
-        )
-        self.btn_install_prov.clicked.connect(lambda: self._install_dependency("provenance"))
-        prov_dep_row.addWidget(self.btn_install_prov)
-        prov_dep_row.addStretch(1)
-        pf.addRow("依赖安装", prov_dep_row)
         layout.addWidget(prov)
 
         # Visible watermark removal
@@ -709,18 +700,16 @@ class SettingsDialog(QDialog):
     def _refresh_prov_status(self) -> None:
         st = visible_models.package_status()
         ok, detail = visible_models.api_probe()
-        if st.importable and ok:
+        if ok:
+            ver = f" v{st.version}" if st.version else ""
+            self.prov_status.setText(f"remove-ai-watermarks{ver} 已随发行包内置，本功能可用。")
+        elif is_frozen():
             self.prov_status.setText(
-                f"remove-ai-watermarks v{st.version or '?'} 已安装，本功能可用。"
-            )
-        elif st.importable:
-            self.prov_status.setText(
-                f"remove-ai-watermarks v{st.version or '?'} 已安装，但无法加载（{detail}）。"
-                "请点击“安装依赖”重新安装，或查看日志。"
+                f"内置 remove-ai-watermarks 无法加载（{detail}）。这是打包问题，请向作者反馈。"
             )
         else:
             self.prov_status.setText(
-                "remove-ai-watermarks 未安装：启用本功能时任务会直接报错。点击“安装依赖”在线安装。"
+                '开发环境未安装 remove-ai-watermarks：执行 pip install "remove-ai-watermarks"，或使用发行包。'
             )
 
     def _refresh_visible_status(self) -> None:
@@ -933,7 +922,7 @@ class SettingsDialog(QDialog):
 
     # ----- in-app dependency installation -----
     def _install_status_label(self, feature: str) -> QLabel:
-        return self.prov_status if feature == "provenance" else self.visible_status
+        return self.visible_status
 
     def _busy(self) -> bool:
         return bool(
@@ -949,7 +938,6 @@ class SettingsDialog(QDialog):
         # two of its threads unpacking into one directory manufacture the
         # half-installed state it exists to repair.
         for btn in (
-            self.btn_install_prov,
             self.btn_install_visible,
             self.btn_install_onnx,
             self.btn_dl_migan,

@@ -191,6 +191,10 @@ hiddenimports += ["ssl", "sysconfig"]
 # so frozen builds must bundle it explicitly or the step dies with
 # ModuleNotFoundError: No module named 'plistlib' at runtime.
 hiddenimports += ["plistlib"]
+# Bundled provenance dependency (metadata cleanup). Also listed in requirements.txt so
+# CI builds can resolve it; the literal import_module() call sites already make
+# Analysis collect it, this entry keeps the contract explicit.
+hiddenimports += ["remove_ai_watermarks", "remove_ai_watermarks.api"]
 
 a = Analysis(
     [str(run_app)],

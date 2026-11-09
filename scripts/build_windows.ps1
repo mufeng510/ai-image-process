@@ -31,6 +31,7 @@ if (Test-Path "build\pyinstaller") { Remove-Item -Recurse -Force "build\pyinstal
 & $py -m PyInstaller --noconfirm --clean --distpath dist --workpath build/pyinstaller build/ai-image-process.spec
 
 Copy-Item -Force LICENSE dist\AI-Image-Process\ -ErrorAction SilentlyContinue
+Copy-Item -Force THIRD_PARTY_NOTICES.md dist\AI-Image-Process\ -ErrorAction SilentlyContinue
 Copy-Item -Force README.md dist\AI-Image-Process\ -ErrorAction SilentlyContinue
 
 # Ship the agent skill, mirroring scripts/build_portable.sh. Without this the

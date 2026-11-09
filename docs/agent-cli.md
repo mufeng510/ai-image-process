@@ -57,7 +57,7 @@ jq -r '.outputs[].output' result.json
 反过来，`rc=1` 时绝不能当作成功。
 
 预检失败（`rc=2`）涵盖：输入路径不存在、目录里没有可处理的图片、非 JPG 输入但
-没有会重编码的步骤、remove-ai-watermarks 未安装、ExifTool / FFmpeg 不可用、
+没有会重编码的步骤、remove-ai-watermarks 无法导入（内置依赖损坏）、ExifTool / FFmpeg 不可用、
 Live Photo 的 AI Provider 未配置等。
 缺依赖/运行时一律拒绝启动，不会以「复制原图」之类的静默降级顶替。
 

@@ -95,17 +95,16 @@ def test_settings_export_import(qapp, tmp_path: Path):
     dlg.close()
 
 
-def test_settings_offers_install_for_both_raiw_features(qapp):
-    """Both remove-ai-watermarks-backed features expose an in-app installer."""
+def test_settings_installs_visible_and_bundles_provenance(qapp):
+    """Provenance is built into the release package -- no in-app installer
+    for it anymore; the visible extra still offers one."""
     from app.core import dependency_installer
 
     cfg = default_config()
     dlg = SettingsDialog(cfg)
-    assert dlg.btn_install_prov.isVisible() or dlg.btn_install_prov.toolTip()
+    assert not hasattr(dlg, "btn_install_prov")
+    assert "remove-ai-watermarks" in dlg.prov_status.text()
     assert dlg.btn_install_visible.isVisible() or dlg.btn_install_visible.toolTip()
-    assert dlg.btn_install_prov.toolTip() == (
-        f'在线安装 {dependency_installer.FEATURE_SPECS["provenance"]}（本功能所需）'
-    )
     assert dlg.btn_install_visible.toolTip() == (
         f'在线安装 {dependency_installer.FEATURE_SPECS["visible"]}（本功能所需，含 cv2 后端）'
     )
@@ -118,11 +117,11 @@ def test_settings_dependency_status_reflects_package_state(qapp):
     cfg = default_config()
     dlg = SettingsDialog(cfg)
     st = visible_models.package_status()
-    if st.importable:
-        assert "已安装" in dlg.prov_status.text()
-    else:
-        assert "未安装" in dlg.prov_status.text()
-        assert "安装依赖" in dlg.prov_status.text()
+    text = dlg.prov_status.text()
+    assert "remove-ai-watermarks" in text
+    ok, _detail = visible_models.api_probe()
+    if ok:
+        assert "内置" in text
     # onnx install button enabled only when the package exists but onnx is missing
     assert dlg.btn_install_onnx.isEnabled() == (st.importable and not st.onnx_ready)
     dlg.close()

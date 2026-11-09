@@ -9,12 +9,14 @@ from app.core import dependency_installer as di
 from app.core.wheel_installer import WheelInstallError
 
 
-def test_feature_specs_cover_both_features():
-    """Both remove-ai-watermarks-backed features have an install method."""
-    assert "provenance" in di.FEATURE_SPECS
+def test_feature_specs_cover_installable_extras():
+    """Visible extra and the onnxruntime backend are installable in-app. The
+    base package (provenance cleanup) is bundled into the release build, so it
+    deliberately has no install spec anymore."""
     assert "visible" in di.FEATURE_SPECS
-    assert di.FEATURE_SPECS["provenance"].startswith("remove-ai-watermarks")
+    assert "onnxruntime" in di.FEATURE_SPECS
     assert "[visible]" in di.FEATURE_SPECS["visible"]
+    assert "provenance" not in di.FEATURE_SPECS
 
 
 def test_feature_spec_unknown_raises():
@@ -176,6 +178,6 @@ def test_install_feature_logs_progress():
     with patch.object(di, "is_frozen", lambda: False), patch.object(
         di, "_run_pip_subprocess"
     ):
-        di.install_feature("provenance", log=lines.append)
+        di.install_feature("visible", log=lines.append)
     assert any("remove-ai-watermarks" in line for line in lines)
     assert any("完成" in line for line in lines)

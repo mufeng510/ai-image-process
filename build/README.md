@@ -86,9 +86,21 @@ git push origin v0.1.0
 - Prefer onedir over onefile for ExifTool/Qt reliability.
 - Do not rely on user PATH for ExifTool/ImageMagick.
 - Non-Windows ExifTool bundling is best-effort and must not fail packaging.
-- `remove-ai-watermarks` is optional and not bundled; end users install it from
-  within the app (Settings → Processing) via the built-in **pure-Python wheel
-  installer** (no system pip / no bundled pip required in frozen builds).
+- `remove-ai-watermarks` (core, Apache-2.0) **is bundled** since 0.7.0 — the
+  provenance cleanup step works out of the box on all platforms. The visible
+  watermark extra `[visible]` and the `[migan]` onnxruntime backend are NOT
+  bundled (they pull ~150 MB of pixel/ML dependencies) and are still installed
+  at runtime from within the app (Settings → Processing) via the built-in
+  **pure-Python wheel installer** (no system pip / no bundled pip required in
+  frozen builds). Model weights are user-initiated downloads, unchanged.
+- Bundling note: `remove-ai-watermarks` imports `plistlib` lazily; frozen
+  builds must list it in `hiddenimports` (see `ai-image-process.spec`), or the
+  metadata step dies with ModuleNotFoundError despite the package being present.
+- License: remove-ai-watermarks is Apache-2.0 (see its PyPI metadata).
+  `THIRD_PARTY_NOTICES.md` at the repo root carries the full Apache-2.0 text
+  and is copied into every portable/Inno artifact by the build scripts. The
+  in-app runtime site (`python-packages`) is separate and installed by the
+  user at their own choice.
 - No Apple codesign/notarization in this pipeline.
 
 ## FFmpeg（Live Photo 本地动态所需）
