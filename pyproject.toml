@@ -16,11 +16,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Upper bound: PySide6-Essentials 6.12.0 segfaults/SIGBUSes at interpreter
-# shutdown after any test that builds MainWindow (offscreen and xcb both), so
-# `pytest -q` dies with exit 135/139 after reporting "19 passed". 6.11.0 is
-# clean. Remove the bound once the teardown crash is fixed upstream.
-gui = ["PySide6-Essentials>=6.6.0,<6.12"]
+# Upper bound: PySide6-Essentials 6.12.0 AND 6.11.3 segfault/SIGBUS at
+# interpreter shutdown after the offscreen GUI tests ("QObject: shared QObject
+# was deleted directly", exit 139) even though every test passes. 6.11.2 is
+# verified clean locally and in CI. Remove the bound once fixed upstream.
+gui = ["PySide6-Essentials>=6.6.0,<6.11.3"]
 dev = ["pytest>=8.0.0"]
 provenance = ["remove-ai-watermarks>=0.26.0"]
 
