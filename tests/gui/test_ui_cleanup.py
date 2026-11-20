@@ -106,3 +106,40 @@ def test_dead_config_key_removed():
     raw = default_config().to_dict()
     raw["output"]["allow_overwrite_originals"] = True
     assert "allow_overwrite_originals" not in AppConfig.from_dict(raw).to_dict()["output"]
+
+
+def test_recurse_checkbox_roundtrip(qapp, isolated_config):
+    win = MainWindow()
+    assert win.chk_recurse.isChecked() is False  # 默认关闭，行为不变
+    win.chk_recurse.setChecked(True)
+    assert win._ui_to_config().input.recurse_folders is True
+    win.chk_recurse.setChecked(False)
+    assert win._ui_to_config().input.recurse_folders is False
+
+    cfg = default_config()
+    cfg.input.recurse_folders = True
+    win._config = cfg
+    win._apply_config_to_ui()
+    assert win.chk_recurse.isChecked() is True
+    win.close()
+
+    # 设置页的开关保留，且与主界面共用同一个配置字段
+    dlg = SettingsDialog(default_config())
+    assert dlg.chk_recurse.isChecked() is False
+    dlg.chk_recurse.setChecked(True)
+    assert dlg._collect_ui_config().input.recurse_folders is True
+    dlg.close()
+
+
+def test_recurse_delete_warning(qapp, isolated_config):
+    win = MainWindow()
+    warn = win.lbl_recurse_delete_warn
+    assert warn.isHidden() is True
+    win.chk_recurse.setChecked(True)
+    assert warn.isHidden() is True  # 只递归不删除，正常
+    win.chk_delete_originals.setChecked(True)
+    assert warn.isHidden() is False  # 两者同时开启才警告
+    assert "整个输入文件夹" in warn.text()
+    win.chk_recurse.setChecked(False)
+    assert warn.isHidden() is True
+    win.close()

@@ -137,9 +137,16 @@ class MainWindow(QMainWindow):
         self.chk_clear_after.setToolTip(
             "处理完成后自动清空已选择的文件/路径，方便直接添加下一批。\n"
             "取消勾选则保留选择，便于失败后重跑同一批。")
+        # 递归扫描只是输入展开方式，与设置页的 input.recurse_folders 同源。
+        self.chk_recurse = QCheckBox("递归扫描子文件夹")
+        self.chk_recurse.setToolTip(
+            "输入是文件夹时，连同所有子文件夹里的图片一起处理。\n"
+            "内容相同的图片仍会在第一步「文件去重」中按内容哈希合并，"
+            "保留路径字典序最靠前的一张；关闭去重则全部处理。")
         btn_row.addWidget(self.btn_add_files)
         btn_row.addWidget(self.btn_add_folder)
         btn_row.addWidget(self.btn_clear)
+        btn_row.addWidget(self.chk_recurse)
         btn_row.addWidget(self.chk_clear_after)
         btn_row.addStretch(1)
         root.addLayout(btn_row)
@@ -170,6 +177,16 @@ class MainWindow(QMainWindow):
             "删除前会确认每个产物真实存在于磁盘上。此操作不可恢复。"
         )
         out_layout.addWidget(self.chk_delete_originals)
+        # 递归 + 删除原件时影响整棵目录树，单独给一条醒目警告。
+        self.lbl_recurse_delete_warn = QLabel(
+            "⚠ 递归扫描 + 删除原件：将删除整个输入文件夹（含所有子文件夹和非图片文件），"
+            "操作不可撤销。")
+        self.lbl_recurse_delete_warn.setWordWrap(True)
+        self.lbl_recurse_delete_warn.setStyleSheet("color:#c53030;font-size:11px;")
+        self.lbl_recurse_delete_warn.setVisible(False)
+        out_layout.addWidget(self.lbl_recurse_delete_warn)
+        self.chk_recurse.toggled.connect(lambda _t: self._refresh_recurse_warning())
+        self.chk_delete_originals.toggled.connect(lambda _t: self._refresh_recurse_warning())
         root.addWidget(out_box)
 
         steps_box = QGroupBox("处理步骤（顺序见 Registry）")
@@ -272,11 +289,19 @@ class MainWindow(QMainWindow):
         self.out_edit.setText(self._config.output.directory)
         self.chk_delete_originals.setChecked(self._config.input.delete_originals_after_run)
         self.chk_clear_after.setChecked(self._config.input.clear_after_run)
+        self.chk_recurse.setChecked(self._config.input.recurse_folders)
         self.chk_live.setChecked(self._config.steps.live_photo.enabled)
         self.hidden_edit.setText(self._config.steps.hidden_image.library_dir or "")
         self._refresh_hidden_count()
         self._refresh_runtime_warning()
+        self._refresh_recurse_warning()
         self.chk_output.setChecked(self._config.steps.output_write.enabled)
+
+    def _refresh_recurse_warning(self) -> None:
+        """递归 + 删除原件会删掉整棵输入目录树，必须醒目提示。"""
+        self.lbl_recurse_delete_warn.setVisible(
+            self.chk_recurse.isChecked() and self.chk_delete_originals.isChecked()
+        )
 
     def _refresh_runtime_warning(self) -> None:
         """Warn about missing external runtimes before a job is started.
@@ -308,6 +333,7 @@ class MainWindow(QMainWindow):
         cfg.output.directory = self.out_edit.text().strip()
         cfg.input.delete_originals_after_run = self.chk_delete_originals.isChecked()
         cfg.input.clear_after_run = self.chk_clear_after.isChecked()
+        cfg.input.recurse_folders = self.chk_recurse.isChecked()
         cfg.steps.hidden_image.library_dir = self.hidden_edit.text().strip()
         cfg.steps.live_photo.enabled = self.chk_live.isChecked()
         cfg.steps.output_write.enabled = self.chk_output.isChecked()

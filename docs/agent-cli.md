@@ -94,7 +94,7 @@ Live Photo 的 AI Provider 未配置等。
 
 | 行为 | 默认 | 后果 |
 | --- | --- | --- |
-| 目录**不递归** | `input.recurse_folders=false` | 子目录里的图片被**静默跳过** |
+| 目录**不递归** | `input.recurse_folders=false` | 子目录里的图片被**静默跳过**；GUI 主界面「递归扫描子文件夹」与设置页共用此开关 |
 | 新装默认全开（除可见水印） | `steps.rotate_crop/hidden_image/live_photo.enabled=true` | 未配隐藏图片库 / 机器上没 FFmpeg 时**首跑 `rc=2`**；用 `--config` 局部关掉即可 |
 | 精确重复被删除 | `steps.deduplicate.enabled=true` | 内容完全相同的文件只保留一个 |
 | 每次建时间戳子目录 | `output.subfolder_per_run=true` | 产出在 `out/20261019-101500/` 下，不在 `out/` 根 |

@@ -48,9 +48,12 @@ produced and none failed.
 
 These are the ones that produce a successful run with the wrong result:
 
-- **Directories are not scanned recursively** (`input.recurse_folders=false`).
+- **Directories are not scanned recursively by default** (`input.recurse_folders=false`).
   Images in subfolders are skipped without any warning. If the file count looks
-  low, this is almost always why.
+  low, this is almost always why. Set `input.recurse_folders=true` in `--config`,
+  or tick the main-window checkbox (shared with the settings page). Duplicates
+  across subfolders are still merged by content hash; keeping the first path in
+  lexicographic order.
 - **Exact duplicates are dropped** (`steps.deduplicate` is on by default).
 - **Output goes into a timestamped subfolder** (`output.subfolder_per_run=true`),
   not directly into the directory you passed to `-o`.

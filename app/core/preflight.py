@@ -102,6 +102,35 @@ def run_preflight(
     hidden_on = bool(config.steps.hidden_image.enabled)
     live_on = bool(config.steps.live_photo.enabled)
 
+    # 1a. Recursive scan + output inside an input directory tree: the next run
+    # would collect this run's products as inputs. Explicit file inputs are
+    # excluded -- their parent directory is never scanned.
+    if config.input.recurse_folders:
+        from app.core.hidden_images import _is_within as _within
+
+        try:
+            out_resolved = output_dir.expanduser().resolve()
+        except OSError:
+            out_resolved = output_dir.expanduser().absolute()
+        for raw in inputs:
+            p = Path(raw)
+            if not p.is_dir():
+                continue
+            try:
+                d_resolved = p.expanduser().resolve()
+            except OSError:
+                d_resolved = p.expanduser().absolute()
+            if _within(out_resolved, d_resolved):
+                return PreflightResult(
+                    ok=False,
+                    error=(
+                        "输出目录位于待递归扫描的输入文件夹内，下一次运行会把本次产物"
+                        "当成输入图片。请把输出目录放到输入文件夹之外，或关闭「递归扫描子文件夹」。\n\n"
+                        f"输入文件夹：{p}\n输出目录：{output_dir}"
+                    ),
+                    extra={"runtime": "recursive_input_output_overlap"},
+                )
+
     # 1b. Output format guarantee: without a JPEG-producing step the source
     # bytes are published verbatim, so a TIFF/PNG input would land in a file
     # named *.jpg. Refuse up front rather than emit mislabeled output.
