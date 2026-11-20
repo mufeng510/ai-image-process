@@ -243,7 +243,7 @@ echo "$out" | jq -e '.failed == 0 and (.outputs|length) > 0' >/dev/null && echo 
 | 现象 | 原因 |
 | --- | --- |
 | 弹出窗口、无输出、退出码 0 | 用了 GUI 入口，改用 `AI-Image-Process-CLI` |
-| `rc=2`，`preflight_error` 提到 ExifTool | 运行时不可用。正式安装包已内置（含 unix 的 perl）；开发环境跑 `scripts/fetch_exiftool.sh` 与 `scripts/fetch_perl.sh`，或用设置面板里的「安装」按钮 |
+| `rc=2`，`preflight_error` 提到 ExifTool | 运行时不可用。正式安装包已内置（含 unix 的 perl），此时应重新安装软件；开发环境跑 `scripts/fetch_exiftool.sh` 与 `scripts/fetch_perl.sh`。设置页只显示状态，没有安装按钮 |
 | `rc=2`，`preflight_error` 提到 FFmpeg | 同上，缺 FFmpeg 时 Live Photo 不可用 |
 | 产出比预期少 | 先看 `--dry-run` 的 `planned_input_count`；多半是没递归（`input.recurse_folders`）或被去重了 |
 | 输出目录里找不到文件 | `output.subfolder_per_run` 默认为 `true`，产物在时间戳子目录里 |

@@ -76,8 +76,9 @@ class RuntimeProblem:
         ]
         if self.can_auto_install:
             parts.append(
-                "\n请在「设置 → 外部运行时」中点击「安装」自动修复；"
-                "或用以下命令手动安装：\n" + self.manual
+                "\n正式安装包与便携包已内置 ExifTool；若内置文件损坏或缺失，"
+                "请重新安装软件。开发环境可运行 scripts/fetch_exiftool.sh（unix）"
+                "或按以下命令手动安装：\n" + self.manual
             )
         elif self.manual:
             parts.append("\n请手动安装后重试：\n" + self.manual)

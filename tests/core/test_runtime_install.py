@@ -328,13 +328,15 @@ def test_explain_repeats_the_manual_command(tmp_path, monkeypatch):
     assert problem.manual in problem.explain(["「写入设备信息」"])
 
 
-def test_explain_points_at_the_settings_button_only_when_auto_install_exists():
-    """A one-click fix must be advertised only when there really is one."""
+def test_explain_recommends_reinstall_without_pointing_at_a_gui_button():
+    """The GUI no longer has an install button, so the refusal text must not
+    send the user looking for one; reinstall and the manual command are the
+    two real recovery paths."""
     text = _problem(can_auto_install=True).explain(["「写入设备信息」"])
-    assert "设置" in text and "安装" in text
+    assert "重新安装软件" in text
+    assert "设置" not in text
+    assert "sudo apt-get install -y perl" in text
 
-    # Without a portable perl for the platform there is nothing to click, and
-    # advertising it sends the user to a button that can only fail.
     manual_only = _problem(can_auto_install=False).explain(["「写入设备信息」"])
     assert "设置" not in manual_only
     assert manual_only.count("sudo apt-get install -y perl") == 1

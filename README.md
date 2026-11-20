@@ -124,8 +124,9 @@ unix 版 ExifTool 是 perl 脚本，所以安装包**同时内置了一个自包
 开发环境请先跑 `scripts/fetch_perl.sh` 与 `scripts/fetch_exiftool.sh`。
 
 万一运行时仍不可用（手工删过文件、平台没有对应构建等），预检会**在写出任何
-文件之前**拦下并说明原因；「设置 → 外部运行时」里有「安装」按钮，可一键把
-便携 perl 与 ExifTool 装进用户目录，**不需要管理员权限**。
+文件之前**拦下并说明原因。发行版已全部内置，此时应重新安装软件；开发环境可跑
+`scripts/fetch_perl.sh` 与 `scripts/fetch_exiftool.sh` 补齐。「设置 → 处理 →
+外部运行时」只显示当前可用状态，不再提供自动安装入口。
 
 ### 让 AI Agent 驱动 CLI
 
