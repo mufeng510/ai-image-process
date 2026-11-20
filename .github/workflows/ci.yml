@@ -44,4 +44,5 @@ jobs:
       - name: Test
         env:
           QT_QPA_PLATFORM: offscreen
+          PYTHONFAULTHANDLER: "1"
         run: pytest -q
