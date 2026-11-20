@@ -221,3 +221,37 @@ def test_local_motion_end_to_end(tmp_path):
     assert rep.ok, rep.errors
     # no template UUID reuse
     assert bundle.asset_identifier not in ("00000000-0000-0000-0000-000000000000",)
+
+
+@pytest.mark.parametrize("fps", [30, 60])
+def test_local_motion_jitter_is_slow_and_fps_independent(tmp_path, monkeypatch, fps):
+    """Handheld sway must be ~0.6-1.3 Hz, not the old ~4/9 Hz twitch, and
+    changing fps must not change the real-world speed."""
+    import math
+    import re
+    from types import SimpleNamespace
+
+    from app.core.live_photo.providers.base import VideoGeneratorContext
+    from app.core.live_photo.providers.local_motion import LocalMotionVideoGenerator
+
+    still = tmp_path / "still.jpg"
+    _img(still, size=(64, 48))
+    captured: list[str] = []
+
+    def fake_run(cmd, **kwargs):
+        captured.append(cmd[cmd.index("-vf") + 1])
+        Path(cmd[-1]).write_bytes(b"mov")
+        return SimpleNamespace(returncode=0, stderr="", stdout="")
+
+    monkeypatch.setattr(
+        "app.core.live_photo.providers.local_motion.subprocess.run", fake_run)
+    out = LocalMotionVideoGenerator(ffmpeg=Path("ffmpeg"), motion_strength=0.06).generate(
+        VideoGeneratorContext(still_image=still, work_dir=tmp_path / f"w{fps}", fps=fps, seed=1))
+    assert out.exists()
+
+    freqs = [float(x) for x in re.findall(r"sin\(on\*([0-9.]+)\+", captured[0])]
+    assert len(freqs) == 4
+    expected = [math.tau * hz / fps for hz in (0.70, 1.30, 0.60, 1.10)]
+    assert freqs == pytest.approx(expected, rel=1e-5)
+    # old constants were 0.71 / 2.31 rad per frame (~4 Hz / ~11 Hz at 30fps)
+    assert max(freqs) < 0.35

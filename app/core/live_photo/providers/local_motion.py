@@ -1,6 +1,7 @@
 """Local subtle-motion video generator (ffmpeg zoompan/pan)."""
 from __future__ import annotations
 
+import math
 import random
 import subprocess
 from pathlib import Path
@@ -36,7 +37,12 @@ class LocalMotionVideoGenerator(VideoGenerator):
         # reads far closer to a real handheld shot than a slow Ken Burns.
         ease_frames = min(n_frames - 1, max(2, int(0.5 * ctx.fps)))
         # pseudo-random phases so consecutive shots never jitter in sync
-        p1, p2, p3, p4 = (rng.uniform(0, 6.2831853072) for _ in range(4))
+        p1, p2, p3, p4 = (rng.uniform(0, math.tau) for _ in range(4))
+        # Handheld sway is slow: ~0.6-1.3 cycles per second, not the old
+        # ~4/9 Hz twitch. Express it in Hz so the speed stays the same when
+        # the user changes fps -- `on` counts frames, not seconds.
+        hz = (0.70, 1.30, 0.60, 1.10)
+        w1, w2, w3, w4 = (math.tau * f / ctx.fps for f in hz)
         # amplitude in input (4x supersampled) pixels; ~1px at output scale
         amp = 4.0
         out = Path(ctx.work_dir) / "local_motion.mov"
@@ -51,11 +57,11 @@ class LocalMotionVideoGenerator(VideoGenerator):
         )
         x_expr = (
             f"iw/2-(iw/zoom/2)"
-            f"+{amp:.5f}*(sin(on*0.83+{p1:.5f})+0.55*sin(on*1.97+{p2:.5f}))"
+            f"+{amp:.5f}*(sin(on*{w1:.6f}+{p1:.5f})+0.55*sin(on*{w2:.6f}+{p2:.5f}))"
         )
         y_expr = (
             f"ih/2-(ih/zoom/2)"
-            f"+{amp:.5f}*(sin(on*0.71+{p3:.5f})+0.55*sin(on*2.31+{p4:.5f}))"
+            f"+{amp:.5f}*(sin(on*{w3:.6f}+{p3:.5f})+0.55*sin(on*{w4:.6f}+{p4:.5f}))"
         )
         filt = (
             f"scale={vw * 4}:{vh * 4}:flags=lanczos,"
