@@ -111,7 +111,9 @@ class MainWindow(QMainWindow):
         )
 
     def _build_ui(self) -> None:
-        central = QWidget(self)
+        # 不预先指定 self 作父对象：下面的 QScrollArea 会接管它，最终由
+        # QMainWindow.setCentralWidget 单一持有，避免析构时重复释放。
+        central = QWidget()
         root = QVBoxLayout(central)
 
         title = QLabel("AI Image Process")
@@ -264,7 +266,7 @@ class MainWindow(QMainWindow):
 
         # 内容区可滚动：高 DPI 缩放或较小屏幕上控件总高度超过窗口时，
         # 仍可滚动到「处理日志」等底部控件，修复“界面显示不全”。
-        scroll = QScrollArea(self)
+        scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QScrollArea.Shape.NoFrame)
         scroll.setWidget(central)
