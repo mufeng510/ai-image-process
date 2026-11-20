@@ -50,14 +50,29 @@ def test_main_window_content_is_scrollable(qapp, isolated_config):
     win.close()
 
 
-def test_main_window_originals_labels_are_unambiguous(qapp, isolated_config):
+def test_main_window_keeps_only_runtime_controls(qapp, isolated_config):
+    """红框内的开关已从主界面移除，设置页必须仍然提供对应项。"""
     win = MainWindow()
-    assert "禁止覆盖原文件" in win.chk_preserve.text()
+    # 输出组：只留删除原件；自动创建目录 / 禁止覆盖原文件已移到设置页
+    assert not hasattr(win, "chk_auto_create")
+    assert not hasattr(win, "chk_preserve")
     assert "删除原件" in win.chk_delete_originals.text()
-    # 两个开关的 tooltip 明确说明互不控制
-    assert "不控制任务结束后是否删除原件" in win.chk_preserve.toolTip()
-    assert "唯一开关" in win.chk_delete_originals.toolTip()
+    # 处理步骤组：只留 Live Photo / 输出写入
+    for name in (
+        "chk_provenance", "chk_visible", "chk_reencode", "chk_device",
+        "chk_rename", "chk_rotate", "chk_hidden",
+    ):
+        assert not hasattr(win, name), f"{name} 不应再出现在主界面"
+    assert win.chk_live is not None and win.chk_output is not None
     win.close()
+
+    dlg = SettingsDialog(default_config())
+    for name in (
+        "chk_auto_create", "chk_preserve", "chk_prov", "chk_visible", "chk_reenc",
+        "chk_device", "chk_rename", "chk_rotate", "chk_hidden",
+    ):
+        assert hasattr(dlg, name), f"设置页缺少 {name}"
+    dlg.close()
 
 
 def test_settings_removes_noop_controls(qapp):

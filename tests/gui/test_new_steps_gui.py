@@ -49,10 +49,9 @@ def _isolated_config(monkeypatch, tmp_path):
 def test_main_window_toggles_and_hidden_count(qapp, tmp_path, monkeypatch):
     _isolated_config(monkeypatch, tmp_path)
     win = MainWindow()
-    assert win.chk_rotate is not None and win.chk_hidden is not None and win.chk_live is not None
-    # 默认除可见水印外全部开启（见 config schema / 主界面默认勾选）
-    assert win.chk_rotate.isChecked() is True
-    assert win.chk_hidden.isChecked() is True
+    # 旋转裁剪 / 隐藏图片开关已移到设置页，主界面只保留 Live Photo 与输出开关。
+    assert not hasattr(win, "chk_rotate") and not hasattr(win, "chk_hidden")
+    assert win.chk_live is not None
     assert win.chk_live.isChecked() is True
     lib = tmp_path / "lib"; lib.mkdir()
     from PIL import Image

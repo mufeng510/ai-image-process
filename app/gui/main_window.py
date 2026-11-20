@@ -154,19 +154,13 @@ class MainWindow(QMainWindow):
         out_row.addWidget(self.out_edit, 1)
         out_row.addWidget(self.btn_out)
         out_layout.addLayout(out_row)
-        self.chk_auto_create = QCheckBox("自动创建输出目录")
-        # 旧标签「保留原始图片」与下面的「删除原件」表意相反，容易被当成
-        # 一对互斥开关；它实际只是“拒绝把产物写到源文件上”的底层保护，
-        # 与任务结束后是否删除原件无关，故改名并补 tooltip。
-        self.chk_preserve = QCheckBox("禁止覆盖原文件（安全保护）")
-        self.chk_preserve.setToolTip(
-            "仅当输出目录与源图片在同一目录时生效：拒绝把产物写到源文件上。\n"
-            "它不控制任务结束后是否删除原件——那由下面「处理完成后删除原件」单独决定。"
-        )
+        # 自动创建目录 / 禁止覆盖原文件已移入「设置 → 常规 → 输出」，
+        # 主界面只保留与本次任务直接相关的输出目录与删除原件开关。
         self.chk_delete_originals = QCheckBox("处理完成后删除原件（危险，不可撤销）")
         self.chk_delete_originals.setStyleSheet("color:#c53030;")
         self.chk_delete_originals.setToolTip(
-            "这是控制原件去留的唯一开关，与上面的「禁止覆盖原文件」安全保护无关。\n"
+            "这是控制原件去留的唯一开关；「设置 → 常规 → 输出」里的「禁止覆盖原文件」\n"
+            "只是输出时的拒写安全保护，与本开关互不影响。\n"
             "处理完成后删除输入的原件：\n"
             "· 输入是文件 → 删除该文件\n"
             "· 输入是文件夹 → 删除整个文件夹（其中有任何文件处理失败就保留，"
@@ -175,37 +169,22 @@ class MainWindow(QMainWindow):
             "仅当任务真正跑完时才执行：预检未通过 / 取消 / 没有落盘产物时不会删除。\n"
             "删除前会确认每个产物真实存在于磁盘上。此操作不可恢复。"
         )
-        out_layout.addWidget(self.chk_auto_create)
-        out_layout.addWidget(self.chk_preserve)
         out_layout.addWidget(self.chk_delete_originals)
         root.addWidget(out_box)
 
         steps_box = QGroupBox("处理步骤（顺序见 Registry）")
         steps_layout = QVBoxLayout(steps_box)
-        self.chk_provenance = QCheckBox("清理 AI Metadata / 溯源信息")
-        self.chk_visible = QCheckBox("去除可见水印（AI 标记）")
-        self.chk_reencode = QCheckBox("图片重编码（JPEG + sRGB）")
-        self.chk_device = QCheckBox("写入设备 Metadata")
-        self.chk_rename = QCheckBox("文件命名")
-        self.chk_rotate = QCheckBox("图片旋转与裁剪")
-        self.chk_hidden = QCheckBox("隐藏图片")
+        # 其余步骤（去重 / 清理 AI Metadata / 可见水印 / 重编码 / 设备 Metadata /
+        # 文件命名 / 旋转裁剪 / 隐藏图片）的开关已统一移入「设置 → 处理」，
+        # 主界面只保留与本次输出直接相关的 Live Photo 与输出写入开关。
         self.chk_live = QCheckBox("生成 Apple Live Photo")
         self.chk_output = QCheckBox("输出处理结果")
-        for w in (
-            self.chk_provenance,
-            self.chk_visible,
-            self.chk_reencode,
-            self.chk_device,
-            self.chk_rename,
-            self.chk_rotate,
-            self.chk_hidden,
-            self.chk_live,
-            self.chk_output,
-        ):
+        for w in (self.chk_live, self.chk_output):
             w.setChecked(True)
             steps_layout.addWidget(w)
-        # 可见水印去除需可选依赖，默认关闭；其余步骤默认开启（见 config schema）
-        self.chk_visible.setChecked(False)
+        steps_hint = QLabel("其余处理步骤的开关请到「设置 → 处理」中配置。")
+        steps_hint.setStyleSheet("color:#666;font-size:11px;")
+        steps_layout.addWidget(steps_hint)
         # 隐藏图片库快捷行
         hidden_row = QHBoxLayout()
         self.hidden_edit = QLineEdit()
@@ -223,8 +202,8 @@ class MainWindow(QMainWindow):
         self.lbl_runtime.setVisible(False)
         steps_layout.addWidget(self.lbl_runtime)
         self.hidden_edit.textChanged.connect(lambda _t: self._refresh_hidden_count())
-        # Enabling device EXIF / Live Photo changes which runtimes matter.
-        self.chk_device.toggled.connect(lambda _t: self._refresh_runtime_warning())
+        # Live Photo 开关直接影响所需运行时；设备 Metadata 步骤已在设置页配置，
+        # 打开设置并保存后由 _apply_config_to_ui 重新计算警告。
         self.chk_live.toggled.connect(lambda _t: self._refresh_runtime_warning())
         root.addWidget(steps_box)
 
@@ -289,18 +268,10 @@ class MainWindow(QMainWindow):
         help_menu.addAction(act_about)
 
     def _apply_config_to_ui(self) -> None:
+        # 已移入设置页的开关不再从主界面回填，配置值以设置页为准。
         self.out_edit.setText(self._config.output.directory)
-        self.chk_auto_create.setChecked(self._config.output.auto_create_directory)
-        self.chk_preserve.setChecked(self._config.output.preserve_originals)
         self.chk_delete_originals.setChecked(self._config.input.delete_originals_after_run)
         self.chk_clear_after.setChecked(self._config.input.clear_after_run)
-        self.chk_provenance.setChecked(self._config.steps.provenance_cleanup.enabled)
-        self.chk_visible.setChecked(self._config.steps.visible_watermark.enabled)
-        self.chk_reencode.setChecked(self._config.steps.reencode.enabled)
-        self.chk_device.setChecked(self._config.steps.device_metadata.enabled)
-        self.chk_rename.setChecked(self._config.steps.rename.enabled)
-        self.chk_rotate.setChecked(self._config.steps.rotate_crop.enabled)
-        self.chk_hidden.setChecked(self._config.steps.hidden_image.enabled)
         self.chk_live.setChecked(self._config.steps.live_photo.enabled)
         self.hidden_edit.setText(self._config.steps.hidden_image.library_dir or "")
         self._refresh_hidden_count()
@@ -320,7 +291,7 @@ class MainWindow(QMainWindow):
         # ExifTool start-up is ~200ms), and this runs while toggling checkboxes.
         tools = runtime_summary()
         missing = []
-        if self.chk_device.isChecked() and not tools["exiftool"].available:
+        if self._config.steps.device_metadata.enabled and not tools["exiftool"].available:
             missing.append("ExifTool（写入设备 Metadata）")
         if self.chk_live.isChecked() and not tools["ffmpeg"].available:
             missing.append("FFmpeg（Live Photo）")
@@ -332,19 +303,11 @@ class MainWindow(QMainWindow):
             self.lbl_runtime.setVisible(False)
 
     def _ui_to_config(self) -> AppConfig:
+        """只回填主界面仍暴露的开关；其余设置以配置/设置页为准。"""
         cfg = self._config
         cfg.output.directory = self.out_edit.text().strip()
-        cfg.output.auto_create_directory = self.chk_auto_create.isChecked()
-        cfg.output.preserve_originals = self.chk_preserve.isChecked()
         cfg.input.delete_originals_after_run = self.chk_delete_originals.isChecked()
         cfg.input.clear_after_run = self.chk_clear_after.isChecked()
-        cfg.steps.provenance_cleanup.enabled = self.chk_provenance.isChecked()
-        cfg.steps.visible_watermark.enabled = self.chk_visible.isChecked()
-        cfg.steps.reencode.enabled = self.chk_reencode.isChecked()
-        cfg.steps.device_metadata.enabled = self.chk_device.isChecked()
-        cfg.steps.rename.enabled = self.chk_rename.isChecked()
-        cfg.steps.rotate_crop.enabled = self.chk_rotate.isChecked()
-        cfg.steps.hidden_image.enabled = self.chk_hidden.isChecked()
         cfg.steps.hidden_image.library_dir = self.hidden_edit.text().strip()
         cfg.steps.live_photo.enabled = self.chk_live.isChecked()
         cfg.steps.output_write.enabled = self.chk_output.isChecked()
