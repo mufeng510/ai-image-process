@@ -170,7 +170,7 @@ class SettingsDialog(QDialog):
     def _fit_to_screen(self) -> None:
         screen = QGuiApplication.primaryScreen()
         if screen is not None:
-            geometry = screen.geometry()
+            geometry = screen.availableGeometry()
             max_w = int(geometry.width() * 0.85)
             max_h = int(geometry.height() * 0.85)
         else:  # no screen (offscreen tests); keep sane defaults
@@ -201,15 +201,21 @@ class SettingsDialog(QDialog):
         form.addRow("默认输出目录", row)
         self.chk_auto_create = QCheckBox("自动创建不存在的输出目录")
         form.addRow(self.chk_auto_create)
-        self.chk_preserve = QCheckBox("保留原始图片（不覆盖原文件）")
+        self.chk_preserve = QCheckBox("禁止覆盖原文件（安全保护）")
+        self.chk_preserve.setToolTip(
+            "仅当输出目录与源图片在同一目录时生效：拒绝把产物写到源文件上。\n"
+            "它不控制任务结束后是否删除原件——那由主界面的「处理完成后删除原件」单独决定。"
+        )
         form.addRow(self.chk_preserve)
-        self.chk_use_source = QCheckBox("默认输出到原图所在目录")
-        form.addRow(self.chk_use_source)
+        # 「默认输出到原图所在目录」已移除：GUI 运行时总会把主界面里填的
+        # 输出目录传给流水线，这个开关只对未指定 -o 的 CLI 有意义，放在 GUI
+        # 设置里表意不明且永远不生效。CLI 仍可通过 --config 设置该键。
         self.chk_subfolder = QCheckBox(
             "每次任务在输出目录下新建时间戳文件夹（如 20261018-143052）")
         self.chk_subfolder.setToolTip(
             "开启后每次处理都会新建一个带时间的子文件夹，多次处理不会互相覆盖。\n"
             "关闭则直接输出到你指定的目录。")
+        self.chk_subfolder.toggled.connect(self._on_subfolder_changed)
         form.addRow(self.chk_subfolder)
         layout.addWidget(out_box)
 
@@ -245,6 +251,12 @@ class SettingsDialog(QDialog):
         self.conflict.addItem("自动跳过", "skip")
         self.conflict.addItem("自动覆盖", "overwrite")
         cform.addRow("文件已存在时", self.conflict)
+        self.conflict_note = QLabel(
+            "开启「每次任务新建时间戳文件夹」时每次都是新目录，不会产生文件名冲突；"
+            "该策略只在关闭该选项时生效。")
+        self.conflict_note.setWordWrap(True)
+        self.conflict_note.setStyleSheet("color:#666;font-size:11px;")
+        cform.addRow(self.conflict_note)
         layout.addWidget(conflict_box)
 
         clean_box = QGroupBox("清理")
@@ -610,11 +622,13 @@ class SettingsDialog(QDialog):
 
         runtime = QGroupBox("运行时")
         rf = QFormLayout(runtime)
-        self.workers = QSpinBox()
-        self.workers.setRange(1, 1)
-        self.workers.setValue(1)
-        self.workers.setToolTip("v1 固定串行处理，避免复杂竞态")
-        rf.addRow("并发数量", self.workers)
+        # 旧版这里是个范围 (1,1) 的 SpinBox：看起来能调，实际永远只能选 1。
+        # 换成静态说明，避免误导；config.runtime.worker_count 仍保留为 1，
+        # 供 CLI / 未来并发实现使用。
+        workers_note = QLabel("当前版本固定为串行处理（并发数 1），暂不可调整。")
+        workers_note.setWordWrap(True)
+        workers_note.setStyleSheet("color:#666;font-size:11px;")
+        rf.addRow("并发数量", workers_note)
         self.log_level = QComboBox()
         for level in ("debug", "info", "warning", "error"):
             self.log_level.addItem(level, level)
@@ -688,6 +702,11 @@ class SettingsDialog(QDialog):
     def _on_device_selection_changed(self, _index: int = 0) -> None:
         fixed = str(self.device_selection.currentData()) == "fixed"
         self.device_fixed.setEnabled(fixed)
+
+    def _on_subfolder_changed(self, checked: bool) -> None:
+        """开启时间戳子目录时，冲突策略永远不会被触发——置灰并说明原因。"""
+        self.conflict.setEnabled(not checked)
+        self.conflict_note.setVisible(checked)
 
     # ----- visible watermark model management -----
     _MODEL_STATUS_TEXT = {
@@ -1135,8 +1154,8 @@ class SettingsDialog(QDialog):
         self.out_dir.setText(cfg.output.directory)
         self.chk_auto_create.setChecked(cfg.output.auto_create_directory)
         self.chk_preserve.setChecked(cfg.output.preserve_originals)
-        self.chk_use_source.setChecked(cfg.output.use_source_directory)
         self.chk_subfolder.setChecked(cfg.output.subfolder_per_run)
+        self._on_subfolder_changed(self.chk_subfolder.isChecked())
 
         preset_key = cfg.naming.preset or "custom"
         pidx = self.preset.findData(preset_key)
@@ -1226,7 +1245,6 @@ class SettingsDialog(QDialog):
 
         self.temp_dir.setText(cfg.paths.temp_dir)
         self.log_dir.setText(cfg.paths.log_dir)
-        self.workers.setValue(1)
         lidx = self.log_level.findData(cfg.runtime.log_level)
         self.log_level.setCurrentIndex(max(0, lidx))
         self.chk_portable.setChecked(cfg.runtime.portable_mode)
@@ -1236,8 +1254,9 @@ class SettingsDialog(QDialog):
         cfg.output.directory = self.out_dir.text().strip()
         cfg.output.auto_create_directory = self.chk_auto_create.isChecked()
         cfg.output.preserve_originals = self.chk_preserve.isChecked()
-        cfg.output.use_source_directory = self.chk_use_source.isChecked()
         cfg.output.subfolder_per_run = self.chk_subfolder.isChecked()
+        # use_source_directory 有意不在 GUI 暴露：GUI 总会传入输出目录，
+        # 该键只对未指定 -o 的 CLI 生效，保留原值不覆盖。
         cfg.output.conflict_policy = str(self.conflict.currentData() or "rename")
 
         preset = str(self.preset.currentData() or "custom")

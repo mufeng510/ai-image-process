@@ -6,7 +6,7 @@ import threading
 from pathlib import Path
 
 from PySide6.QtCore import QTimer, Slot, QUrl
-from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices
+from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices, QGuiApplication
 from PySide6.QtWidgets import (
     QCheckBox,
     QFileDialog,
@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QProgressBar,
     QPushButton,
+    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
@@ -46,7 +47,7 @@ class MainWindow(QMainWindow):
                 self.setWindowIcon(_icon)
         except Exception:  # noqa: BLE001
             pass
-        self.resize(880, 680)
+        self._fit_to_screen()
 
         self._cfg_mgr = ConfigManager(user_config_dir() / "config.json")
         try:
@@ -88,9 +89,29 @@ class MainWindow(QMainWindow):
         if os.environ.get("QT_QPA_PLATFORM") != "offscreen":
             QTimer.singleShot(1500, self, lambda: self._start_update_check(manual=False))
 
+    def _fit_to_screen(self) -> None:
+        """按屏幕可用几何设置初始尺寸，避免高 DPI 缩放下窗口超出屏幕。
+
+        旧版固定 ``resize(880, 680)``（逻辑像素）：在 150% 缩放下实际占
+        1320×1020 物理像素，再加标题栏与任务栏后底部控件被截断。这里把尺寸
+        限制在屏幕可用区域内并居中；内容区另套 QScrollArea，任何缩放比例下
+        都能滚动访问全部控件。
+        """
+        screen = QGuiApplication.primaryScreen()
+        if screen is None:  # offscreen / 无屏幕环境
+            self.resize(880, 680)
+            return
+        avail = screen.availableGeometry()
+        width = min(980, max(480, avail.width() - 40), avail.width())
+        height = min(900, max(420, avail.height() - 40), avail.height())
+        self.resize(width, height)
+        self.move(
+            avail.x() + max(0, (avail.width() - width) // 2),
+            avail.y() + max(0, (avail.height() - height) // 2),
+        )
+
     def _build_ui(self) -> None:
         central = QWidget(self)
-        self.setCentralWidget(central)
         root = QVBoxLayout(central)
 
         title = QLabel("AI Image Process")
@@ -134,10 +155,18 @@ class MainWindow(QMainWindow):
         out_row.addWidget(self.btn_out)
         out_layout.addLayout(out_row)
         self.chk_auto_create = QCheckBox("自动创建输出目录")
-        self.chk_preserve = QCheckBox("保留原始图片（推荐）")
+        # 旧标签「保留原始图片」与下面的「删除原件」表意相反，容易被当成
+        # 一对互斥开关；它实际只是“拒绝把产物写到源文件上”的底层保护，
+        # 与任务结束后是否删除原件无关，故改名并补 tooltip。
+        self.chk_preserve = QCheckBox("禁止覆盖原文件（安全保护）")
+        self.chk_preserve.setToolTip(
+            "仅当输出目录与源图片在同一目录时生效：拒绝把产物写到源文件上。\n"
+            "它不控制任务结束后是否删除原件——那由下面「处理完成后删除原件」单独决定。"
+        )
         self.chk_delete_originals = QCheckBox("处理完成后删除原件（危险，不可撤销）")
         self.chk_delete_originals.setStyleSheet("color:#c53030;")
         self.chk_delete_originals.setToolTip(
+            "这是控制原件去留的唯一开关，与上面的「禁止覆盖原文件」安全保护无关。\n"
             "处理完成后删除输入的原件：\n"
             "· 输入是文件 → 删除该文件\n"
             "· 输入是文件夹 → 删除整个文件夹（其中有任何文件处理失败就保留，"
@@ -236,6 +265,14 @@ class MainWindow(QMainWindow):
         self.log.setMaximumBlockCount(3000)
         self.log.setPlaceholderText("处理日志…")
         root.addWidget(self.log, 1)
+
+        # 内容区可滚动：高 DPI 缩放或较小屏幕上控件总高度超过窗口时，
+        # 仍可滚动到「处理日志」等底部控件，修复“界面显示不全”。
+        scroll = QScrollArea(self)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        scroll.setWidget(central)
+        self.setCentralWidget(scroll)
 
     def _build_menu(self) -> None:
         file_menu = self.menuBar().addMenu("文件")

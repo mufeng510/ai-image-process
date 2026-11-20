@@ -167,8 +167,7 @@ device_metadata → rotate_crop → hidden_image → live_photo → output_write
 | `output.conflict_policy` | `rename` | `overwrite` / `skip` / `rename` |
 | `output.auto_create_directory` | `true` | 自动创建输出目录 |
 | `output.use_source_directory` | `false` | 输出到源目录 |
-| `output.preserve_originals` | `true` | 保留原图 |
-| `output.allow_overwrite_originals` | `false` | 是否允许覆盖原图 |
+| `output.preserve_originals` | `true` | 安全保护：拒绝把产物写到源文件上（仅当输出目录与源目录重叠时触发）；**不控制任务结束后是否删除原件**，那是 `input.delete_originals_after_run` |
 | `naming.preset` / `naming.template` | `original` / `{original_name}` | 命名规则 |
 | `naming.number_start` / `number_width` | `1` / `3` | 编号起点与位数 |
 | `runtime.worker_count` | `1` | **并发数**，>1 明显更快 |

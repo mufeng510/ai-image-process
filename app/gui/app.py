@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import sys
 
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QApplication
 
 from app.gui.icons import get_app_icon
@@ -31,6 +33,13 @@ def _preload_opencv() -> None:
 def run_gui(argv: list[str] | None = None) -> int:
     args = list(sys.argv if argv is None else argv)
     _preload_opencv()
+    # Windows 桌面缩放（125% / 150% / 175%）下，部分 Qt6 版本会把缩放系数
+    # 四舍五入成整数，使窗口按 2x 布局后超出屏幕。PassThrough 保留真实小数
+    # 倍率；配合主窗口按屏幕可用几何初始化尺寸 + 可滚动内容区，缩放后界面
+    # 的每个控件都能被滚动到，不会被任务栏截断。
+    QGuiApplication.setHighDpiScaleFactorRoundingPolicy(
+        Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
+    )
     app = QApplication(args)
     app.setApplicationName("AI Image Process")
     app.setApplicationVersion(__version__)

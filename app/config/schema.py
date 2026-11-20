@@ -30,8 +30,9 @@ class OutputConfig:
     # so repeated runs never mix or overwrite each other.
     subfolder_per_run: bool = True
     conflict_policy: str = "rename"  # overwrite|skip|rename
+    # 安全保护：拒绝把产物写到源文件上（仅当输出目录与源目录重叠时触发）。
+    # 它不控制任务结束后是否删除原件——那是 input.delete_originals_after_run。
     preserve_originals: bool = True
-    allow_overwrite_originals: bool = False
 
 
 @dataclass

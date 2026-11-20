@@ -135,6 +135,10 @@ register built-in steps; GUI lists from registry; future steps without GUI rewri
 7. cleanup_temp: delete only under verified temp_root/job_id prefix
 
 ## 6. Config schema v2 (canonical; v1 historical below)
+
+> 现行权威定义是 `app/config/schema.py`。`output.allow_overwrite_originals` 从未被任何代码读取，
+> 已从 schema 与设置文档移除；下方 v1/v2 列表作为历史记录保留该字段。
+
 config_version: 2 (v1 configs auto-migrate; new steps default OFF)
 ui_language: zh-CN
 output: directory, use_source_directory, auto_create_directory, conflict_policy (rename|skip|overwrite), preserve_originals true, allow_overwrite_originals false
