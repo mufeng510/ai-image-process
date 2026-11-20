@@ -180,7 +180,7 @@ class SettingsDialog(QDialog):
         # 输出目录传给流水线，这个开关只对未指定 -o 的 CLI 有意义，放在 GUI
         # 设置里表意不明且永远不生效。CLI 仍可通过 --config 设置该键。
         self.chk_subfolder = QCheckBox(
-            "每次任务在输出目录下新建时间戳文件夹（如 20261018-143052）")
+            "每次任务在输出目录下新建带时间戳的文件夹（如 1028-1430-旅行照片）")
         self.chk_subfolder.setToolTip(
             "开启后每次处理都会新建一个带时间的子文件夹，多次处理不会互相覆盖。\n"
             "关闭则直接输出到你指定的目录。")

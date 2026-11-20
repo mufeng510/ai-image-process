@@ -12,7 +12,7 @@ from app.core.device_library import DeviceLibrary
 from app.core.errors import to_user_message
 from app.core.exiftool_runner import ExifToolRunner
 from app.core.hidden_images import delete_hidden_image
-from app.core.output_paths import resolve_run_folder
+from app.core.output_paths import resolve_run_folder, run_folder_prefix
 from app.core.output_format import OUTPUT_JPG_EXT
 from app.core.models import (
     CancelToken,
@@ -107,6 +107,9 @@ def run_job(
     workspace = temp_mgr.create_job_workspace(job_id)
     files = collect_inputs([Path(p) for p in inputs], config)
     records = to_records(files)
+    # Short, sanitized hint from the first input; the folder name leads with
+    # the timestamp, so alphabetical order stays chronological.
+    run_prefix = run_folder_prefix(inputs)
 
     result = JobResult(job_id=job_id)
 
@@ -150,7 +153,8 @@ def run_job(
     # never mix into one directory. Resolution is pure (creates nothing) so a
     # preflight failure still leaves no trace.
     try:
-        out = resolve_run_folder(out_root, per_run=config.output.subfolder_per_run)
+        out = resolve_run_folder(
+            out_root, per_run=config.output.subfolder_per_run, prefix=run_prefix)
     except RuntimeError as exc:
         # Structured failure like every other preflight-style refusal, so the
         # CLI reports it instead of raising a traceback.
@@ -234,7 +238,7 @@ def run_job(
                 break
             except FileExistsError:
                 try:
-                    out = resolve_run_folder(out_root, per_run=True)
+                    out = resolve_run_folder(out_root, per_run=True, prefix=run_prefix)
                 except RuntimeError as exc:
                     result.preflight_failed = True
                     result.preflight_error = to_user_message(exc)
@@ -247,7 +251,7 @@ def run_job(
                 # output_write report it per file with the usual message.
                 break
         else:
-            out = resolve_run_folder(out_root, per_run=True)
+            out = resolve_run_folder(out_root, per_run=True, prefix=run_prefix)
         if run_folder_ours:
             emit(ProgressKind.LOG, message=f"[输出] 本次结果目录：{out}")
 

@@ -14,11 +14,13 @@ from PIL import Image
 from app.config.schema import AppConfig, default_config
 from app.core import output_paths
 from app.core.output_format import OUTPUT_JPG_EXT
-from app.core.output_paths import MAX_SUFFIX_ATTEMPTS, resolve_run_folder, run_folder_name
+from app.core.output_paths import (
+    MAX_SUFFIX_ATTEMPTS, resolve_run_folder, run_folder_name, run_folder_prefix,
+)
 from app.core.pipeline import run_job
 
 WHEN = datetime(2026, 10, 18, 3, 59, 51)
-STAMP = "20261018-035951"
+STAMP = "1018-0359"
 
 
 class _FrozenClock(datetime):
@@ -29,9 +31,32 @@ class _FrozenClock(datetime):
         return WHEN
 
 
-def test_run_folder_name_uses_second_resolution():
+def test_run_folder_name_uses_minute_resolution():
     assert run_folder_name(WHEN) == STAMP
-    assert run_folder_name() == datetime.now().strftime("%Y%m%d-%H%M%S")  # defaults to now
+    assert run_folder_name() == datetime.now().strftime("%m%d-%H%M")  # defaults to now
+
+
+def test_run_folder_name_appends_prefix():
+    assert run_folder_name(WHEN, "旅行照片") == f"{STAMP}-旅行照片"
+    # 非法字符替换、去首尾空白/下划线、超长截断、空值回退
+    assert run_folder_name(WHEN, "a/b:c*?") == f"{STAMP}-a_b_c"
+    assert run_folder_name(WHEN, "abcdefghijk") == f"{STAMP}-abcdefgh"
+    assert run_folder_name(WHEN, "...") == f"{STAMP}-batch"
+
+
+def test_run_folder_prefix_derivation(tmp_path):
+    folder = tmp_path / "2026日本旅行"
+    folder.mkdir()
+    photo = folder / "IMG_0001.jpg"
+    photo.write_bytes(b"x")
+
+    assert run_folder_prefix([folder]) == "2026日本旅行"
+    assert run_folder_prefix([photo]) == "2026日本旅行"  # 文件取父目录名
+    assert run_folder_prefix([photo, folder]) == "2026日本旅行"  # 多个输入取第一个
+    assert run_folder_prefix([]) == ""
+    long_name = tmp_path / "abcdefghijk"
+    long_name.mkdir()
+    assert run_folder_prefix([long_name]) == "abcdefgh"  # 最多 8 个字符
 
 
 def test_resolve_run_folder_appends_timestamp_and_creates_nothing(tmp_path):
@@ -43,7 +68,7 @@ def test_resolve_run_folder_appends_timestamp_and_creates_nothing(tmp_path):
 
 
 @pytest.mark.parametrize("taken,expected", [
-    ([], STAMP),            # first run of that second
+    ([], STAMP),            # first run of that minute
     ([STAMP], f"{STAMP}-2"),
     ([STAMP, f"{STAMP}-2"], f"{STAMP}-3"),
 ])
@@ -133,7 +158,7 @@ def test_run_job_publishes_into_one_timestamped_subfolder(tmp_path):
     assert (result.preflight_failed, result.success_count, result.failure_count) == (False, 2, 0)
     subs = sorted(p for p in exports.iterdir() if p.is_dir())
     assert len(subs) == 1
-    assert re.fullmatch(r"\d{8}-\d{6}", subs[0].name)
+    assert re.fullmatch(r"\d{4}-\d{4}-in", subs[0].name)  # MMDD-HHmm-来源提示
     assert sorted(p.name for p in subs[0].glob(f"*{OUTPUT_JPG_EXT}")) == [
         f"photo0{OUTPUT_JPG_EXT}", f"photo1{OUTPUT_JPG_EXT}"]
     assert list(exports.glob(f"*{OUTPUT_JPG_EXT}")) == []  # nothing written straight into the root
@@ -143,13 +168,14 @@ def test_repeated_runs_never_share_or_overwrite_a_folder(tmp_path, monkeypatch):
     monkeypatch.setattr(output_paths, "datetime", _FrozenClock)  # force the same second
     src, exports = _inputs(tmp_path), tmp_path / "exports"
     _run(_config(tmp_path), src, exports, tmp_path)
-    first = exports / STAMP
+    named = f"{STAMP}-in"
+    first = exports / named
     before = {p.name: p.stat().st_size for p in first.glob(f"*{OUTPUT_JPG_EXT}")}
     assert len(before) == 2 and all(size > 0 for size in before.values())
     _run(_config(tmp_path), src, exports, tmp_path)
-    assert sorted(p.name for p in exports.iterdir()) == [STAMP, f"{STAMP}-2"]
+    assert sorted(p.name for p in exports.iterdir()) == [named, f"{named}-2"]
     assert {p.name: p.stat().st_size for p in first.glob(f"*{OUTPUT_JPG_EXT}")} == before  # run 1 intact
-    assert len(list((exports / f"{STAMP}-2").glob(f"*{OUTPUT_JPG_EXT}"))) == 2
+    assert len(list((exports / f"{named}-2").glob(f"*{OUTPUT_JPG_EXT}"))) == 2
 
 
 def test_subfolder_per_run_false_writes_into_the_chosen_directory(tmp_path):
@@ -287,8 +313,8 @@ def test_placeholder_creation_survives_another_job_taking_the_name(tmp_path, mon
     src, exports = _inputs(tmp_path), tmp_path / "exports"
     real, seen = output_paths.resolve_run_folder, []
 
-    def raced(root, *, when=None, per_run=True):
-        path = real(root, when=when, per_run=per_run)
+    def raced(root, *, when=None, per_run=True, prefix=None):
+        path = real(root, when=when, per_run=per_run, prefix=prefix)
         seen.append(path)
         if len(seen) == 1:  # "another process" grabs the name right here
             path.mkdir(parents=True)
@@ -300,7 +326,7 @@ def test_placeholder_creation_survives_another_job_taking_the_name(tmp_path, mon
     monkeypatch.setattr(pipeline, "resolve_run_folder", raced)
     result = _run(_config(tmp_path), src, exports, tmp_path)
     assert result.success_count == 2
-    theirs, ours = exports / STAMP, exports / f"{STAMP}-2"
+    theirs, ours = exports / f"{STAMP}-in", exports / f"{STAMP}-in-2"
     assert (theirs / "theirs.jpg").read_bytes() == b"not-ours"  # theirs, untouched
     assert not (theirs / f"photo0{OUTPUT_JPG_EXT}").exists()  # we did not share their folder
     assert sorted(p.name for p in ours.glob(f"*{OUTPUT_JPG_EXT}")) == [
@@ -313,7 +339,7 @@ def test_unusable_run_folder_is_a_refusal_not_a_traceback(tmp_path, monkeypatch)
     monkeypatch.setattr(output_paths, "datetime", _FrozenClock)
     monkeypatch.setattr(output_paths, "MAX_SUFFIX_ATTEMPTS", 1)
     src, exports = _inputs(tmp_path), tmp_path / "exports"
-    for name in (STAMP, f"{STAMP}-2"):
+    for name in (f"{STAMP}-in", f"{STAMP}-in-2"):
         (exports / name).mkdir(parents=True)
     before = sorted(p.name for p in exports.iterdir())
     result = _run(_config(tmp_path), src, exports, tmp_path)
